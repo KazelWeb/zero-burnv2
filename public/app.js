@@ -336,39 +336,94 @@ async function logout() {
   initializeApp();
 }
 
-async function showAuthPrompt(mode) {
-  const email = window.prompt(`${mode} email:`)?.trim();
-  const password = window.prompt(`${mode} password:`)?.trim();
-  if (!email || !password) return;
+let pendingAuthEmail = '';
 
-  const endpoint = mode === 'Register' ? '/auth/register' : '/auth/login';
-  const body = { email, password };
-  if (mode === 'Register') body.displayName = email;
+const authPage = document.getElementById('authPage');
+const loginBox = document.getElementById('loginBox');
+const registerBox = document.getElementById('registerBox');
+const otpBox = document.getElementById('otpBox');
 
+document.getElementById('showRegister').addEventListener('click', (e) => { e.preventDefault(); loginBox.hidden = true; registerBox.hidden = false; });
+document.getElementById('showLogin').addEventListener('click', (e) => { e.preventDefault(); registerBox.hidden = true; loginBox.hidden = false; });
+document.querySelectorAll('.close-auth').forEach(btn => btn.addEventListener('click', () => authPage.hidden = true));
+
+authBtn.addEventListener('click', () => { authPage.hidden = false; loginBox.hidden = false; registerBox.hidden = true; otpBox.hidden = true; });
+authBtn.type = 'button';
+registerBtn.addEventListener('click', () => { authPage.hidden = false; loginBox.hidden = true; registerBox.hidden = false; otpBox.hidden = true; });
+registerBtn.type = 'button';
+
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('registerEmail').value.trim();
+  const displayName = document.getElementById('registerName').value.trim();
+  const password = document.getElementById('registerPassword').value.trim();
   try {
-    const res = await fetch(endpoint, {
+    const res = await fetch('/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ email, password, displayName })
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || 'Authentication failed');
+      alert(data.error || 'Registration failed');
       return;
     }
     setAuthState(data.user);
     await loadRemoteData();
     initializeApp();
+    authPage.hidden = true;
   } catch (err) {
-    console.warn('[auth] auth failed:', err.message);
     alert('Authentication failed');
   }
-}
+});
 
-authBtn.addEventListener('click', () => showAuthPrompt('Login'));
-authBtn.type = 'button';
-registerBtn.addEventListener('click', () => showAuthPrompt('Register'));
-registerBtn.type = 'button';
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value.trim();
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Login failed');
+      return;
+    }
+    if (data.requireOtp) {
+      pendingAuthEmail = data.email;
+      loginBox.hidden = true;
+      otpBox.hidden = false;
+    }
+  } catch (err) {
+    alert('Authentication failed');
+  }
+});
+
+document.getElementById('otpForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = document.getElementById('otpCode').value.trim();
+  try {
+    const res = await fetch('/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pendingAuthEmail, code })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Verification failed');
+      return;
+    }
+    setAuthState(data.user);
+    await loadRemoteData();
+    initializeApp();
+    authPage.hidden = true;
+  } catch (err) {
+    alert('Verification failed');
+  }
+});
 logoutBtn.addEventListener('click', logout);
 logoutBtn.type = 'button';
 

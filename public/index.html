@@ -164,6 +164,42 @@
 
 </div>
 
+  <!-- AUTH PAGES -->
+  <div class="auth-page" id="authPage" hidden>
+    <div class="auth-box" id="loginBox" hidden>
+      <h2>Login</h2>
+      <form id="loginForm">
+        <input type="email" id="loginEmail" placeholder="Email" required>
+        <input type="password" id="loginPassword" placeholder="Password" required>
+        <button type="submit" class="send-btn full">Login</button>
+      </form>
+      <p>Don't have an account? <a href="#" id="showRegister">Register</a></p>
+      <button type="button" class="close-auth" id="closeLogin">×</button>
+    </div>
+
+    <div class="auth-box" id="registerBox" hidden>
+      <h2>Register</h2>
+      <form id="registerForm">
+        <input type="email" id="registerEmail" placeholder="Email" required>
+        <input type="text" id="registerName" placeholder="Display Name">
+        <input type="password" id="registerPassword" placeholder="Password" required>
+        <button type="submit" class="send-btn full">Register</button>
+      </form>
+      <p>Already have an account? <a href="#" id="showLogin">Login</a></p>
+      <button type="button" class="close-auth" id="closeRegister">×</button>
+    </div>
+
+    <div class="auth-box" id="otpBox" hidden>
+      <h2>Enter Code</h2>
+      <p>A 6-digit code was sent to your email.</p>
+      <form id="otpForm">
+        <input type="text" id="otpCode" placeholder="123456" maxlength="6" required>
+        <button type="submit" class="send-btn full">Verify</button>
+      </form>
+      <button type="button" class="close-auth" id="closeOtp">×</button>
+    </div>
+  </div>
+
   <!-- CHAT CONTEXT MENU -->
   <div class="context-menu" id="chatContextMenu" hidden>
     <button type="button" class="context-menu-item" id="ctxArchiveBtn">Archive Chat</button>

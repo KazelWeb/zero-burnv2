@@ -45,7 +45,9 @@ async function ensureDatabase() {
       display_name TEXT,
       photo_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      otp_code VARCHAR(6),
+      otp_expires_at TIMESTAMPTZ
     );
     CREATE TABLE IF NOT EXISTS user_data (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -180,9 +182,46 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-app.post('/auth/login', passport.authenticate('local'), (req, res) => {
-  const { email, displayName } = req.user;
-  res.json({ authenticated: true, user: { email, displayName } });
+app.post('/auth/login', (req, res, next) => {
+  passport.authenticate('local', async (err, user, info) => {
+    if (err) return res.status(500).json({ error: 'Server error' });
+    if (!user) return res.status(401).json({ error: info.message || 'Invalid credentials' });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    try {
+      await pool.query('UPDATE users SET otp_code = $1, otp_expires_at = NOW() + INTERVAL \'10 minutes\' WHERE id = $2', [otp, user.id]);
+      
+      // MOCK EMAIL SENDING - Check your terminal/console for this code!
+      console.log(`\n\n[EMAIL MOCK] To: ${user.email} | Your Login Code is: ${otp}\n\n`);
+      
+      res.json({ requireOtp: true, email: user.email });
+    } catch (dbErr) {
+      res.status(500).json({ error: 'Failed to generate OTP' });
+    }
+  })(req, res, next);
+});
+
+app.post('/auth/verify-otp', async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
+
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
+    const user = result.rows[0];
+
+    if (!user || user.otp_code !== code || new Date() > new Date(user.otp_expires_at)) {
+      return res.status(401).json({ error: 'Invalid or expired code.' });
+    }
+
+    await pool.query('UPDATE users SET otp_code = NULL, otp_expires_at = NULL WHERE id = $1', [user.id]);
+
+    req.login({ id: user.id, email: user.email, displayName: user.display_name }, err => {
+      if (err) return res.status(500).json({ error: 'Login failed' });
+      res.json({ authenticated: true, user: { email: user.email, displayName: user.display_name } });
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Verification failed.' });
+  }
 });
 
 app.post('/auth/logout', (req, res, next) => {
