@@ -5,6 +5,7 @@ const chatHistory = document.getElementById('chatHistory');
 
 const archiveToggleBtn = document.getElementById('archiveToggleBtn');
 const chatContextMenu = document.getElementById('chatContextMenu');
+const ctxRenameBtn = document.getElementById('ctxRenameBtn');
 const ctxArchiveBtn = document.getElementById('ctxArchiveBtn');
 const ctxDeleteBtn = document.getElementById('ctxDeleteBtn');
 
@@ -17,7 +18,7 @@ const saveSourceInlineBtn = document.getElementById('saveSourceInlineBtn');
 const sourcesPreview = document.getElementById('sourcesPreview');
 
 const sourceEditorModal = document.getElementById('sourceEditorModal');
-const sourceEditorTitle = document.getElementById('sourceEditorTitle');
+const sourceEditorTitleInput = document.getElementById('sourceEditorTitleInput');
 const sourceEditorContent = document.getElementById('sourceEditorContent');
 const closeSourceEditorModal = document.getElementById('closeSourceEditorModal');
 const saveSourceEditorBtn = document.getElementById('saveSourceEditorBtn');
@@ -39,6 +40,7 @@ let viewingArchived = false;
 let contextMenuChatId = null;
 
 function saveChats() {
+  if (!user) return;
   localStorage.setItem('zb_chats', JSON.stringify(chats));
   scheduleRemoteSync();
 }
@@ -193,6 +195,22 @@ function closeContextMenu() {
 document.addEventListener('click', () => closeContextMenu());
 document.addEventListener('scroll', () => closeContextMenu(), true);
 
+ctxRenameBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!contextMenuChatId) return;
+  const chat = chats.find(c => c.id === contextMenuChatId);
+  if (chat) {
+    const newTitle = prompt('Enter new chat name:', chat.title);
+    if (newTitle !== null && newTitle.trim()) {
+      chat.title = newTitle.trim();
+      chat.titleGenerated = true;
+      saveChats();
+      renderChatHistory(chatSearch.value);
+    }
+  }
+  closeContextMenu();
+});
+
 ctxArchiveBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   if (!contextMenuChatId) return;
@@ -232,6 +250,7 @@ archiveToggleBtn.addEventListener('click', () => {
 });
 
 newChatBtn.addEventListener('click', () => {
+  if (!user) return alert('Please login to create a chat.');
   createNewChat();
 });
 
@@ -244,6 +263,7 @@ let sources = JSON.parse(localStorage.getItem('zb_sources') || '[]');
 let pendingSourceIds = [];
 
 function saveSources() {
+  if (!user) return;
   localStorage.setItem('zb_sources', JSON.stringify(sources));
   scheduleRemoteSync();
 }
@@ -253,11 +273,30 @@ function setAuthState(userData) {
   authUserName.textContent = user ? user.displayName || user.email : 'Guest';
   authBtn.hidden = !!user;
   logoutBtn.hidden = !user;
+
+  const isLoggedIn = !!user;
+  newChatBtn.disabled = !isLoggedIn;
+  addSourceSidebarBtn.disabled = !isLoggedIn;
+  chatInput.disabled = !isLoggedIn;
+  chatInput.placeholder = isLoggedIn ? "Message the model..." : "Please login to chat...";
+  sendBtn.disabled = !isLoggedIn;
+
+  if (!isLoggedIn) {
+    chats = [];
+    sources = [];
+    currentChatId = null;
+    history = [];
+    chatLog.innerHTML = '<div class="placeholder">Please login to view or create chats.</div>';
+    renderChatHistory('');
+    renderSourcesSidebarList();
+  }
 }
 
 function loadLocalData() {
-  chats = JSON.parse(localStorage.getItem('zb_chats') || '[]');
-  sources = JSON.parse(localStorage.getItem('zb_sources') || '[]');
+  chats = [];
+  sources = [];
+  localStorage.removeItem('zb_chats');
+  localStorage.removeItem('zb_sources');
 }
 
 async function loadRemoteData() {
@@ -265,13 +304,8 @@ async function loadRemoteData() {
     const res = await fetch('/api/data');
     if (!res.ok) throw new Error('Failed to load remote data');
     const data = await res.json();
-    const remoteChats = Array.isArray(data.chats) ? data.chats : [];
-    const remoteSources = Array.isArray(data.sources) ? data.sources : [];
-    const localChats = JSON.parse(localStorage.getItem('zb_chats') || '[]');
-    const localSources = JSON.parse(localStorage.getItem('zb_sources') || '[]');
-
-    chats = remoteChats.length ? remoteChats : localChats;
-    sources = remoteSources.length ? remoteSources : localSources;
+    chats = Array.isArray(data.chats) ? data.chats : [];
+    sources = Array.isArray(data.sources) ? data.sources : [];
     localStorage.setItem('zb_chats', JSON.stringify(chats));
     localStorage.setItem('zb_sources', JSON.stringify(sources));
   } catch (err) {
@@ -434,7 +468,7 @@ function openSourceEditor(id) {
   const src = sources.find(s => s.id === id);
   if (!src) return;
   currentEditingSourceId = id;
-  sourceEditorTitle.textContent = src.name;
+  sourceEditorTitleInput.value = src.name;
   sourceEditorContent.value = src.content;
   sourceEditorModal.hidden = false;
 }
@@ -480,6 +514,7 @@ function getSelectedSourcesText() {
 }
 
 addSourceSidebarBtn.addEventListener('click', () => {
+  if (!user) return alert('Please login to add sources.');
   sourcesAddInline.hidden = !sourcesAddInline.hidden;
   if (!sourcesAddInline.hidden) sourceNameInline.focus();
 });
@@ -519,8 +554,11 @@ saveSourceEditorBtn.addEventListener('click', () => {
   if (!currentEditingSourceId) return;
   const src = sources.find(s => s.id === currentEditingSourceId);
   if (src) {
+    src.name = sourceEditorTitleInput.value.trim() || src.name;
     src.content = sourceEditorContent.value;
     saveSources();
+    renderSourcesSidebarList();
+    renderSourcesPreview();
   }
   closeSourceEditor();
 });
@@ -884,10 +922,14 @@ editBtn.addEventListener('click', async () => {
 // ---------- Sources sidebar: initial render ----------
 function initializeApp() {
   renderSourcesSidebarList();
-  if (chats.length) {
-    loadChat(chats[0].id);
+  if (user) {
+    if (chats.length) {
+      loadChat(chats[0].id);
+    } else {
+      createNewChat();
+    }
   } else {
-    createNewChat();
+    chatLog.innerHTML = '<div class="placeholder">Please login to view or create chats.</div>';
   }
   renderChatHistory('');
 }

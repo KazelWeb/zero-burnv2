@@ -922,6 +922,25 @@ textarea, select, input[type="text"] {
   padding: 14px;
 }
 
+.source-editor-title-input {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 8px;
+  border-radius: 6px;
+  outline: none;
+  width: 70%;
+  transition: all 0.2s;
+}
+
+.source-editor-title-input:focus {
+  border-color: var(--border);
+  background: var(--panel);
+}
+
 #sourceEditorModal textarea {
   width: 100%;
   min-height: 260px;

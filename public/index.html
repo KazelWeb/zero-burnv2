@@ -145,7 +145,7 @@
   <div class="modal-overlay" id="sourceEditorModal" hidden>
     <div class="modal-box">
       <div class="modal-header">
-        <span id="sourceEditorTitle">Edit Source</span>
+        <input type="text" id="sourceEditorTitleInput" class="source-editor-title-input" placeholder="Source Name">
         <button type="button" class="icon-btn" id="closeSourceEditorModal" title="Close">×</button>
       </div>
       <div class="modal-body">
@@ -198,6 +198,7 @@
 
   <!-- CHAT CONTEXT MENU -->
   <div class="context-menu" id="chatContextMenu" hidden>
+    <button type="button" class="context-menu-item" id="ctxRenameBtn">Rename Chat</button>
     <button type="button" class="context-menu-item" id="ctxArchiveBtn">Archive Chat</button>
     <button type="button" class="context-menu-item danger" id="ctxDeleteBtn">Delete Chat</button>
   </div>
