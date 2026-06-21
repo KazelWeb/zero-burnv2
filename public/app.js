@@ -57,11 +57,7 @@ function persistCurrentChat() {
 }
 
 function introHtml() {
-  return `
-    <div class="msg system">
-      <div class="msg-role">system</div>
-      <div class="msg-body">Ask anything, or attach an image to ask about it. Streaming responses, powered by <span class="model-tag" id="modelTagChat">${chatModel.value}</span>.</div>
-    </div>`;
+  return '';
 }
 
 function createNewChat() {
@@ -336,20 +332,17 @@ async function logout() {
   initializeApp();
 }
 
-let pendingAuthEmail = '';
-
 const authPage = document.getElementById('authPage');
 const loginBox = document.getElementById('loginBox');
 const registerBox = document.getElementById('registerBox');
-const otpBox = document.getElementById('otpBox');
 
 document.getElementById('showRegister').addEventListener('click', (e) => { e.preventDefault(); loginBox.hidden = true; registerBox.hidden = false; });
 document.getElementById('showLogin').addEventListener('click', (e) => { e.preventDefault(); registerBox.hidden = true; loginBox.hidden = false; });
 document.querySelectorAll('.close-auth').forEach(btn => btn.addEventListener('click', () => authPage.hidden = true));
 
-authBtn.addEventListener('click', () => { authPage.hidden = false; loginBox.hidden = false; registerBox.hidden = true; otpBox.hidden = true; });
+authBtn.addEventListener('click', () => { authPage.hidden = false; loginBox.hidden = false; registerBox.hidden = true; });
 authBtn.type = 'button';
-registerBtn.addEventListener('click', () => { authPage.hidden = false; loginBox.hidden = true; registerBox.hidden = false; otpBox.hidden = true; });
+registerBtn.addEventListener('click', () => { authPage.hidden = false; loginBox.hidden = true; registerBox.hidden = false; });
 registerBtn.type = 'button';
 
 document.getElementById('registerForm').addEventListener('submit', async (e) => {
@@ -392,36 +385,12 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       alert(data.error || 'Login failed');
       return;
     }
-    if (data.requireOtp) {
-      pendingAuthEmail = data.email;
-      loginBox.hidden = true;
-      otpBox.hidden = false;
-    }
-  } catch (err) {
-    alert('Authentication failed');
-  }
-});
-
-document.getElementById('otpForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const code = document.getElementById('otpCode').value.trim();
-  try {
-    const res = await fetch('/auth/verify-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingAuthEmail, code })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.error || 'Verification failed');
-      return;
-    }
     setAuthState(data.user);
     await loadRemoteData();
     initializeApp();
     authPage.hidden = true;
   } catch (err) {
-    alert('Verification failed');
+    alert('Authentication failed');
   }
 });
 logoutBtn.addEventListener('click', logout);
