@@ -272,6 +272,7 @@ function setAuthState(userData) {
   user = userData;
   authUserName.textContent = user ? user.displayName || user.email : 'Guest';
   authBtn.hidden = !!user;
+  registerBtn.hidden = !!user;
   logoutBtn.hidden = !user;
 
   const isLoggedIn = !!user;
