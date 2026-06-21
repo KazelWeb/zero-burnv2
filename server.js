@@ -419,15 +419,20 @@ app.post('/api/edit-image', upload.array('images', 4), async (req, res) => {
 
 // ---- ROBLOX STUDIO ENDPOINTS ----
 app.post('/api/roblox/data', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, chats, sources } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Missing credentials" });
   try {
     const lowerEmail = email.toLowerCase();
     const result = await pool.query('SELECT id, password_hash FROM users WHERE email = $1', [lowerEmail]);
     const user = result.rows[0];
     if (user && await bcrypt.compare(password, user.password_hash)) {
-      const userData = await loadUserData(user.id);
-      res.json({ success: true, chats: userData.chats, sources: userData.sources });
+      if (chats && sources) {
+        await saveUserData(user.id, { chats, sources });
+        res.json({ success: true });
+      } else {
+        const userData = await loadUserData(user.id);
+        res.json({ success: true, chats: userData.chats, sources: userData.sources });
+      }
     } else {
       res.status(401).json({ error: "Invalid credentials" });
     }
