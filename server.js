@@ -419,7 +419,26 @@ app.post('/api/edit-image', upload.array('images', 4), async (req, res) => {
 
 // ---- ROBLOX STUDIO ENDPOINT ----
 app.post('/api/roblox', async (req, res) => {
-  const { prompt, history = [] } = req.body;
+  const { prompt, history = [], email, password } = req.body;
+
+  let userSourcesText = "";
+  if (email && password) {
+    try {
+      const lowerEmail = email.toLowerCase();
+      const result = await pool.query('SELECT id, password_hash FROM users WHERE email = $1', [lowerEmail]);
+      const user = result.rows[0];
+      if (user && await bcrypt.compare(password, user.password_hash)) {
+        const userData = await loadUserData(user.id);
+        if (userData.sources && userData.sources.length > 0) {
+          userSourcesText = "\n\nUSER SOURCES (Use these as context):\n" + userData.sources.map(s => `[${s.name}]\n${s.content}`).join('\n\n');
+        }
+      } else {
+        return res.status(401).json({ error: "Invalid email or password.", message: "Invalid email or password.", actions: [] });
+      }
+    } catch (err) {
+      console.error("[Roblox Auth Error]:", err);
+    }
+  }
 
   // We force the AI to act as a Roblox Studio assistant and return strict JSON.
   const systemPrompt = `You are an elite Roblox Studio AI Assistant integrated directly into the engine.
@@ -435,6 +454,18 @@ Your JSON must match this structure exactly:
       "source": "print('Hello World')"
     },
     {
+      "type": "create_local_script",
+      "parent": "StarterPlayer.StarterPlayerScripts", 
+      "name": "MyLocalScript",
+      "source": "print('Hello Client')"
+    },
+    {
+      "type": "create_module_script",
+      "parent": "ReplicatedStorage", 
+      "name": "MyModule",
+      "source": "return {}"
+    },
+    {
       "type": "create_instance",
       "className": "Part",
       "parent": "Workspace",
@@ -443,8 +474,8 @@ Your JSON must match this structure exactly:
     }
   ]
 }
-Valid parents: Workspace, ServerScriptService, StarterGui, ReplicatedStorage, StarterPlayerScripts.
-If no actions are needed, leave the "actions" array empty.`;
+Valid parents include: Workspace, ServerScriptService, StarterGui, ReplicatedStorage, StarterPlayer.StarterPlayerScripts, StarterPlayer.StarterCharacterScripts.
+If no actions are needed, leave the "actions" array empty.${userSourcesText}`;
 
   const fullMessages = [
     { role: 'system', content: systemPrompt },
