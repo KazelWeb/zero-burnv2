@@ -130,6 +130,7 @@ passport.use(new LocalStrategy({ usernameField: 'email', passwordField: 'passwor
   }
 }));
 
+app.set('trust proxy', 1);
 app.use(session({
   store: new pgSession({
     pool,
@@ -141,7 +142,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax'
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
   }
 }));
 app.use(passport.initialize());
