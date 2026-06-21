@@ -417,6 +417,78 @@ app.post('/api/edit-image', upload.array('images', 4), async (req, res) => {
   }
 });
 
+// ---- ROBLOX STUDIO ENDPOINT ----
+app.post('/api/roblox', async (req, res) => {
+  const { prompt, history = [] } = req.body;
+
+  // We force the AI to act as a Roblox Studio assistant and return strict JSON.
+  const systemPrompt = `You are an elite Roblox Studio AI Assistant integrated directly into the engine.
+You must ALWAYS respond in valid JSON format. Do not include markdown formatting like \`\`\`json.
+Your JSON must match this structure exactly:
+{
+  "message": "Your text response to the user",
+  "actions": [
+    {
+      "type": "create_script",
+      "parent": "ServerScriptService", 
+      "name": "MyScript",
+      "source": "print('Hello World')"
+    },
+    {
+      "type": "create_instance",
+      "className": "Part",
+      "parent": "Workspace",
+      "name": "AIPart",
+      "properties": { "Anchored": true, "BrickColor": "Bright red" }
+    }
+  ]
+}
+Valid parents: Workspace, ServerScriptService, StarterGui, ReplicatedStorage, StarterPlayerScripts.
+If no actions are needed, leave the "actions" array empty.`;
+
+  const fullMessages = [
+    { role: 'system', content: systemPrompt },
+    ...history,
+    { role: 'user', content: prompt }
+  ];
+
+  try {
+    const upstream = await fetch(`${API_BASE}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: TEXT_MODEL,
+        temperature: 0.2, // Low temperature for strict JSON adherence
+        stream: false,    // Roblox HttpService cannot handle streams
+        messages: fullMessages
+      })
+    });
+
+    if (!upstream.ok) {
+      const errText = await upstream.text();
+      return res.status(upstream.status).json({ error: errText });
+    }
+
+    const data = await upstream.json();
+    let content = data.choices[0].message.content.trim();
+
+    // Strip markdown formatting if the AI accidentally includes it
+    if (content.startsWith('```json')) {
+      content = content.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+    }
+
+    // Parse to ensure it's valid JSON before sending to Roblox
+    const parsedResponse = JSON.parse(content);
+    res.json(parsedResponse);
+
+  } catch (err) {
+    console.error("[Roblox API Error]:", err);
+    res.status(500).json({ error: err.message, message: "Internal Server Error", actions: [] });
+  }
+});
 
 (async () => {
   try {
