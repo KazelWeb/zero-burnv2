@@ -417,7 +417,25 @@ app.post('/api/edit-image', upload.array('images', 4), async (req, res) => {
   }
 });
 
-// ---- ROBLOX STUDIO ENDPOINT ----
+// ---- ROBLOX STUDIO ENDPOINTS ----
+app.post('/api/roblox/data', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Missing credentials" });
+  try {
+    const lowerEmail = email.toLowerCase();
+    const result = await pool.query('SELECT id, password_hash FROM users WHERE email = $1', [lowerEmail]);
+    const user = result.rows[0];
+    if (user && await bcrypt.compare(password, user.password_hash)) {
+      const userData = await loadUserData(user.id);
+      res.json({ success: true, chats: userData.chats, sources: userData.sources });
+    } else {
+      res.status(401).json({ error: "Invalid credentials" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/roblox', async (req, res) => {
   const { prompt, history = [], email, password } = req.body;
 
@@ -474,8 +492,12 @@ Your JSON must match this structure exactly:
     }
   ]
 }
-Valid parents include: Workspace, ServerScriptService, StarterGui, ReplicatedStorage, StarterPlayer.StarterPlayerScripts, StarterPlayer.StarterCharacterScripts.
-If no actions are needed, leave the "actions" array empty.${userSourcesText}`;
+
+CRITICAL RULES:
+1. Valid parents include: Workspace, ServerScriptService, StarterGui, ReplicatedStorage, StarterPlayer.StarterPlayerScripts, StarterPlayer.StarterCharacterScripts.
+2. If the user asks for a LocalScript, you MUST use "type": "create_local_script".
+3. If the user asks to put it in StarterPlayerScripts, you MUST set "parent": "StarterPlayer.StarterPlayerScripts".
+4. If no actions are needed, leave the "actions" array empty.${userSourcesText}`;
 
   const fullMessages = [
     { role: 'system', content: systemPrompt },
