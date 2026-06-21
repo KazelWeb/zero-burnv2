@@ -61,9 +61,20 @@ async function ensureDatabase() {
 async function loadUserData(userId) {
   const result = await pool.query('SELECT chats, sources FROM user_data WHERE user_id = $1', [userId]);
   if (!result.rows[0]) return { chats: [], sources: [] };
+  
+  let loadedChats = result.rows[0].chats || [];
+  let loadedSources = result.rows[0].sources || [];
+  
+  if (typeof loadedChats === 'string') {
+    try { loadedChats = JSON.parse(loadedChats); } catch(e) { loadedChats = []; }
+  }
+  if (typeof loadedSources === 'string') {
+    try { loadedSources = JSON.parse(loadedSources); } catch(e) { loadedSources = []; }
+  }
+
   return {
-    chats: result.rows[0].chats || [],
-    sources: result.rows[0].sources || []
+    chats: loadedChats,
+    sources: loadedSources
   };
 }
 
@@ -72,7 +83,7 @@ async function saveUserData(userId, data) {
     `INSERT INTO user_data (user_id, chats, sources, updated_at)
      VALUES ($1, $2, $3, NOW())
      ON CONFLICT (user_id) DO UPDATE SET chats = EXCLUDED.chats, sources = EXCLUDED.sources, updated_at = NOW()`,
-    [userId, data.chats || [], data.sources || []]
+    [userId, JSON.stringify(data.chats || []), JSON.stringify(data.sources || [])]
   );
 }
 
@@ -235,6 +246,7 @@ app.post('/api/data', requireAuth, async (req, res) => {
     await saveUserData(req.user.id, { chats, sources });
     res.json({ success: true });
   } catch (err) {
+    console.error('[api/data] save error:', err);
     res.status(500).json({ error: 'Failed to save user data' });
   }
 });

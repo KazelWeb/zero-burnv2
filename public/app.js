@@ -330,10 +330,18 @@ async function syncRemoteData() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chats, sources })
     });
+    remoteSyncTimer = null;
   } catch (err) {
     console.warn('[auth] sync failed:', err.message);
   }
 }
+
+window.addEventListener('beforeunload', () => {
+  if (user && remoteSyncTimer) {
+    const blob = new Blob([JSON.stringify({ chats, sources })], { type: 'application/json' });
+    navigator.sendBeacon('/api/data', blob);
+  }
+});
 
 async function fetchAuthStatus() {
   try {
