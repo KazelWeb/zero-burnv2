@@ -591,19 +591,19 @@ Before emitting any "create_gui" actions for a NEW screen (any full interface â€
         - IF all four are already clear (explicitly named, inferable from a reference image/description, the user said "don't ask, just build" / "use your best judgement" / "surprise me", or this is a follow-up) â€” skip all gates below and go straight to building. Do not ask again.
         - OTHERWISE, you must ask for any missing pillars ONE AT A TIME. Do NOT ask for multiple pillars in the same message.
 
-        1. PATTERN GATE: If PATTERN is missing, respond with "actions": [] and use your "message" field to ask:
+        1. PATTERN GATE: If PATTERN is missing, you MUST STILL RETURN VALID JSON. Set "actions": [] and set "message" to EXACTLY:
           "What pattern would you like?\n\n1. Inventory\n2. Shop\n3. Settings\n4. Quest Log\n5. Skill Tree\n6. Leaderboard\n7. Popup\n8. Notification\n9. Dialogue\n10. Crafting\n11. Trading\n12. Collection\n13. Profile\n14. Battle Pass\n15. Loading Screen\n\nYou can reply with a number or name, or say 'surprise me'."
           Then wait for the reply.
 
-        2. LAYOUT GATE: Once PATTERN is resolved, if LAYOUT is missing, respond with "actions": [] and use your "message" field to ask:
+        2. LAYOUT GATE: Once PATTERN is resolved, if LAYOUT is missing, you MUST STILL RETURN VALID JSON. Set "actions": [] and set "message" to EXACTLY:
           "Choose a Layout:\n\n1. Single Panel\n2. Tabbed Panel\n3. Sidebar + Content\n4. Grid\n5. List\n6. Grid + Details\n\nYou can reply with a number or name, or say 'surprise me'."
           Then wait for the reply.
 
-        3. THEME GATE: Once PATTERN and LAYOUT are resolved, if THEME is missing, respond with "actions": [] and use your "message" field to ask:
+        3. THEME GATE: Once PATTERN and LAYOUT are resolved, if THEME is missing, you MUST STILL RETURN VALID JSON. Set "actions": [] and set "message" to EXACTLY:
           "Choose a Theme:\n\n1. Dark RPG\n2. Fantasy\n3. Sci-Fi\n4. Modern\n5. Minimal\n6. Neon\n7. Anime\n8. Medieval\n9. Corporate\n10. Cute\n\nYou can reply with a number or name, or say 'surprise me'."
           Then wait for the reply.
 
-        4. COLOR PALETTE GATE: Once PATTERN, LAYOUT, and THEME are resolved, if COLOR PALETTE is missing, respond with "actions": [] and use your "message" field to ask EXACTLY this, verbatim, with nothing else added:
+        4. COLOR PALETTE GATE: Once PATTERN, LAYOUT, and THEME are resolved, if COLOR PALETTE is missing, you MUST STILL RETURN VALID JSON. Set "actions": [] and set "message" to EXACTLY this, verbatim, with nothing else added:
           "Choose Color Palette\n\nPrimary:  [ColorMap]\nSecondary:  [ColorMap]\nAccent:  [ColorMap]\n\nPick swatches in the color picker below, or reply with hex codes (e.g. 'Primary: #FF2EC4, Secondary: #2EE6FF, Accent: #FFE94D'), or say 'use theme defaults' to skip."
           Then wait for the reply.
 
@@ -796,7 +796,15 @@ e. Never leave a large empty area under a short list. Keep the outer MainPanel's
     }
 
     // Parse to ensure it's valid JSON before sending to Roblox
-    const parsedResponse = JSON.parse(content);
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(content);
+      if (typeof parsedResponse !== 'object' || parsedResponse === null || Array.isArray(parsedResponse)) {
+        parsedResponse = { message: String(content), actions: [] };
+      }
+    } catch (parseErr) {
+      parsedResponse = { message: content, actions: [] };
+    }
 
     res.json(parsedResponse);
 
