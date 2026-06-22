@@ -157,6 +157,30 @@ function sanitizeJsonNewlines(text) {
   return result;
 }
 
+async function resolveImageUrls(messages) {
+  if (!Array.isArray(messages)) return;
+  for (const msg of messages) {
+    if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === 'image_url' && part.image_url && part.image_url.url) {
+          const url = part.image_url.url;
+          if (url.includes('/api/roblox/image/')) {
+            const imageId = url.split('/').pop();
+            try {
+              const result = await pool.query('SELECT image_data, mime_type FROM generated_images WHERE id = $1', [imageId]);
+              if (result.rows[0]) {
+                part.image_url.url = `data:${result.rows[0].mime_type};base64,${result.rows[0].image_data}`;
+              }
+            } catch (err) {
+              console.error('Failed to resolve image URL:', err);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -323,6 +347,8 @@ app.post('/api/upload-image', requireAuth, upload.single('image'), async (req, r
 app.post('/api/chat', async (req, res) => {
   const { messages, temperature, system, model } = req.body;
 
+  await resolveImageUrls(messages);
+
   const fullMessages = system
     ? [{ role: 'system', content: system }, ...messages]
     : messages;
@@ -364,6 +390,8 @@ app.post('/api/chat', async (req, res) => {
 // ---- AI-generated chat title ----
 app.post('/api/generate-title', async (req, res) => {
   const { messages } = req.body;
+
+  await resolveImageUrls(messages);
 
   const titleMessages = [
     {
@@ -849,11 +877,25 @@ e. Never leave a large empty area under a short list. Recompute the panel height
 
   let userContent = prompt;
   if (image) {
+    let finalImageUrl = image;
+    if (image.includes('/api/roblox/image/')) {
+      const imageId = image.split('/').pop();
+      try {
+        const result = await pool.query('SELECT image_data, mime_type FROM generated_images WHERE id = $1', [imageId]);
+        if (result.rows[0]) {
+          finalImageUrl = `data:${result.rows[0].mime_type};base64,${result.rows[0].image_data}`;
+        }
+      } catch (err) {
+        console.error('Failed to resolve image URL:', err);
+      }
+    }
     userContent = [
       { type: 'text', text: prompt || 'What is in this image?' },
-      { type: 'image_url', image_url: { url: image } }
+      { type: 'image_url', image_url: { url: finalImageUrl } }
     ];
   }
+
+  await resolveImageUrls(history);
 
   const fullMessages = [
     { role: 'system', content: systemPrompt },
