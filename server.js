@@ -425,57 +425,6 @@ app.post('/api/edit-image', upload.array('images', 4), async (req, res) => {
 
 // ---- ROBLOX STUDIO ENDPOINTS ----
 
-// Helper: for each create_gui action that carries an "imagePrompt" property,
-// auto-generate an image, store it, and replace imagePrompt with Image URL.
-async function processActionsWithImages(actions) {
-  if (!Array.isArray(actions) || actions.length === 0) return actions;
-
-  const promises = actions.map(async (action) => {
-    const newAction = Object.assign({}, action);
-    if (
-      newAction.type === 'create_gui' &&
-      newAction.properties &&
-      typeof newAction.properties === 'object' &&
-      newAction.properties.imagePrompt
-    ) {
-      const imagePrompt = newAction.properties.imagePrompt;
-      newAction.properties = Object.assign({}, newAction.properties);
-      delete newAction.properties.imagePrompt;
-      try {
-        const imgRes = await fetch(`${API_BASE}/v1/images/generations`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${API_KEY}`
-          },
-          body: JSON.stringify({
-            model: IMAGE_MODEL,
-            prompt: imagePrompt,
-            n: 1,
-            size: '1024x1024'
-          })
-        });
-        const imgData = await imgRes.json();
-        if (imgData.data && imgData.data[0] && imgData.data[0].b64_json) {
-          const imageId = 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-          await pool.query(
-            'INSERT INTO generated_images (id, image_data, mime_type) VALUES ($1, $2, $3)',
-            [imageId, imgData.data[0].b64_json, 'image/png']
-          );
-          newAction.properties.Image = BASE_URL + '/api/roblox/image/' + imageId;
-          newAction.properties.ScaleType = 'Fit';
-          newAction.properties.BackgroundTransparency = 1;
-        }
-      } catch (err) {
-        console.error('[processActionsWithImages] image gen error:', err.message);
-      }
-    }
-    return newAction;
-  });
-
-  return Promise.all(promises);
-}
-
 // Serve a persisted generated image by its unique ID
 app.get('/api/roblox/image/:id', async (req, res) => {
   try {
@@ -491,6 +440,61 @@ app.get('/api/roblox/image/:id', async (req, res) => {
   } catch (err) {
     console.error('[/api/roblox/image] error:', err.message);
     res.status(500).json({ error: 'Failed to serve image' });
+  }
+});
+
+// Generate a single GUI image — called by the Roblox plugin as one background task per element.
+// Keeping this separate from /api/roblox means the main AI call never blocks on image generation.
+app.post('/api/roblox/generate-gui-image', async (req, res) => {
+  const { email, password, prompt } = req.body;
+  if (!email || !password || !prompt) {
+    return res.status(400).json({ error: 'Missing required fields: email, password, prompt' });
+  }
+  // Authenticate
+  try {
+    const lowerEmail = email.toLowerCase();
+    const userResult = await pool.query(
+      'SELECT id, password_hash FROM users WHERE email = $1',
+      [lowerEmail]
+    );
+    const user = userResult.rows[0];
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: 'Authentication error' });
+  }
+  // Generate + store
+  try {
+    const imgRes = await fetch(`${API_BASE}/v1/images/generations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: IMAGE_MODEL,
+        prompt,
+        n: 1,
+        size: '1024x1024'
+      })
+    });
+    const imgData = await imgRes.json();
+    if (!imgData.data || !imgData.data[0] || !imgData.data[0].b64_json) {
+      return res.status(500).json({ error: 'Image generation failed or returned no data' });
+    }
+    const imageId = 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    await pool.query(
+      'INSERT INTO generated_images (id, image_data, mime_type) VALUES ($1, $2, $3)',
+      [imageId, imgData.data[0].b64_json, 'image/png']
+    );
+    res.json({
+      success: true,
+      imageUrl: BASE_URL + '/api/roblox/image/' + imageId
+    });
+  } catch (err) {
+    console.error('[/api/roblox/generate-gui-image] error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -702,11 +706,6 @@ e. Never leave a large empty area under a short list. Keep the outer MainPanel's
 
     // Parse to ensure it's valid JSON before sending to Roblox
     const parsedResponse = JSON.parse(content);
-
-    // Auto-generate images for any create_gui action that carries imagePrompt
-    if (Array.isArray(parsedResponse.actions) && parsedResponse.actions.length > 0) {
-      parsedResponse.actions = await processActionsWithImages(parsedResponse.actions);
-    }
 
     res.json(parsedResponse);
 
