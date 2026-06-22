@@ -548,7 +548,7 @@ app.post('/api/roblox', async (req, res) => {
 You must ALWAYS respond in valid JSON format. Do not include markdown formatting like \`\`\`json.
 Your JSON must match this structure exactly:
 {
-  "message": "Your text response to the user",
+  "message": "Your text response to the user. If you are creating objects, ALWAYS include a markdown table in your message listing the Name, Type, and Location of the created objects.",
   "actions": [
     {
       "type": "create_script",
@@ -668,7 +668,9 @@ e. Never leave a large empty area under a short list. Keep the outer MainPanel's
     - Coin icon:         "imagePrompt": "shiny gold coin with star emblem, cartoon game icon, transparent background"
     - Character avatar:  "imagePrompt": "chibi Roblox character avatar, warrior outfit, blue theme, transparent background"
     For shop UIs (like Image 1), always create item ImageLabels with imagePrompt for each product slot. For quest UIs (like Image 2), add imagePrompt to reward ImageLabels. For background art, create a full-size ImageLabel (Size "{1, 0, 1, 0}", Position "{0, 0, 0, 0}", ZIndex 0) behind all other elements and give it an imagePrompt describing the scene.
-    Do NOT add imagePrompt to Frame, TextLabel, TextButton, ScrollingFrame, UIGridLayout, UIListLayout, UICorner, UIStroke, UIGradient, UIPadding, or any non-image element.${userSourcesText}`;
+    Do NOT add imagePrompt to Frame, TextLabel, TextButton, ScrollingFrame, UIGridLayout, UIListLayout, UICorner, UIStroke, UIGradient, UIPadding, or any non-image element.
+
+11. RESPONSE FORMATTING: If you execute actions to create objects, you MUST include a markdown table in your "message" field detailing what was created. The table should have columns for 'Name', 'Type', and 'Location'.${userSourcesText}`;
 
   const fullMessages = [
     { role: 'system', content: systemPrompt },
