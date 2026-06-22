@@ -544,8 +544,8 @@ app.post('/api/roblox', async (req, res) => {
   }
 
   // We force the AI to act as a Roblox Studio assistant and return strict JSON.
-  const systemPrompt = `You are an elite Roblox Studio AI Assistant AND a professional Roblox UI/UX Designer integrated directly into the engine.
-You must ALWAYS respond in valid JSON format. Do not include markdown formatting like \`\`\`json.
+const systemPrompt = `You are an elite Roblox Studio AI Assistant AND a professional Roblox UI/UX Designer integrated directly into the engine.
+You must ALWAYS respond in valid JSON format. Do not include markdown formatting like \`\`\`json. NEVER output any text outside of the JSON object. Any conversational text MUST be placed inside the "message" string field of the JSON.
 Your JSON must match this structure exactly:
 {
   "message": "Your text response to the user. If you are creating objects, ALWAYS include a markdown table in your message listing the Name, Type, and Location of the created objects.",
@@ -608,7 +608,7 @@ Before emitting any "create_gui" actions for a NEW screen (any full interface �
           Then wait for the reply.
 
         - The COLOR PALETTE step counts as resolved the moment ANY of the following is true: the user's reply contains a "Primary:"/"Secondary:"/"Accent:" hex line (this is exactly how the plugin's color-swatch picker replies — parse each hex it provides and OVERRIDE that palette role's color with the exact hex given, leaving every other palette value — bg/panel/card/inset/border/text/muted/currency/rarity/gradientTop/gradientBottom — at the resolved THEME's defaults); the user says "use theme defaults"/"skip"/"default"/"surprise me"/"any"/"you pick"; or the user said "don't ask, just build"/"use your best judgement" anywhere earlier in the conversation (in which case use the resolved THEME's default Primary/Secondary/Accent with no override).
-          Once PATTERN, LAYOUT, THEME, and COLOR PALETTE are ALL resolved, state the final Primary/Secondary/Accent colors in one short line of your "message" field, and build the full screen immediately using that pattern + layout + theme + palette. Do not ask again for any of it.
+          Once PATTERN, LAYOUT, THEME, and COLOR PALETTE are ALL resolved, state the final Primary/Secondary/Accent colors in one short line INSIDE your "message" field, and build the full screen immediately using that pattern + layout + theme + palette. Do not ask again for any of it.
 
 CRITICAL RULES:
 1. Valid parents include: Workspace, ServerScriptService, StarterGui, ReplicatedStorage, StarterPlayer.StarterPlayerScripts, StarterPlayer.StarterCharacterScripts. To parent to a newly created object, use dot notation (e.g., "StarterGui.MyScreenGui.MyFrame").
@@ -787,15 +787,41 @@ e. Never leave a large empty area under a short list. Keep the outer MainPanel's
       return res.status(upstream.status).json({ error: errText });
     }
 
-    const data = await upstream.json();
-    let content = data.choices[0].message.content.trim();
+    let data;
+    const rawText = await upstream.text();
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      data = {
+        choices: [{
+          message: { content: rawText }
+        }]
+      };
+    }
+
+    let content = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content.trim() : "";
 
     // Strip markdown formatting if the AI accidentally includes it
     if (content.startsWith('```json')) {
       content = content.replace(/^```json\n?/, '').replace(/\n?```$/, '');
     }
 
-    // Parse to ensure it's valid JSON before sending to Roblox
+    // Try to extract JSON if there's text outside it
+    const jsonStart = content.indexOf('{');
+    const jsonEnd = content.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      let possibleJson = content.substring(jsonStart, jsonEnd + 1);
+      try {
+        let parsed = JSON.parse(possibleJson);
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          content = possibleJson;
+        }
+      } catch (e) {
+        // Ignore and let the normal flow handle it
+      }
+    }
+
+// Parse to ensure it's valid JSON before sending to Roblox
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(content);
