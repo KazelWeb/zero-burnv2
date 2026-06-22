@@ -413,6 +413,57 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
+const AUTH_STORAGE_KEY = 'zb_remember';
+
+function saveAuthCredentials(email, password) {
+  try {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ email, password }));
+  } catch (err) {
+    console.warn('[auth] failed to save credentials locally:', err.message);
+  }
+}
+
+function clearAuthCredentials() {
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch (err) {
+    console.warn('[auth] failed to clear local credentials:', err.message);
+  }
+}
+
+function getSavedAuthCredentials() {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function attemptAutoLogin() {
+  const saved = getSavedAuthCredentials();
+  if (!saved || !saved.email || !saved.password) return false;
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: saved.email, password: saved.password })
+    });
+    const data = await res.json();
+    if (res.ok && data.authenticated) {
+      setAuthState(data.user);
+      await loadRemoteData();
+      return true;
+    }
+    // Saved credentials no longer valid (password changed, account removed, etc.)
+    clearAuthCredentials();
+    return false;
+  } catch (err) {
+    console.warn('[auth] auto-login failed:', err.message);
+    return false;
+  }
+}
+
 async function fetchAuthStatus() {
   try {
     const res = await fetch('/api/user');
@@ -421,13 +472,19 @@ async function fetchAuthStatus() {
       setAuthState(data.user);
       await loadRemoteData();
     } else {
-      setAuthState(null);
-      loadLocalData();
+      const autoLoggedIn = await attemptAutoLogin();
+      if (!autoLoggedIn) {
+        setAuthState(null);
+        loadLocalData();
+      }
     }
   } catch (err) {
     console.warn('[auth] status check failed:', err.message);
-    setAuthState(null);
-    loadLocalData();
+    const autoLoggedIn = await attemptAutoLogin();
+    if (!autoLoggedIn) {
+      setAuthState(null);
+      loadLocalData();
+    }
   } finally {
     authInitialized = true;
   }
@@ -439,6 +496,7 @@ async function logout() {
   } catch (err) {
     console.warn('[auth] logout failed:', err.message);
   }
+  clearAuthCredentials();
   setAuthState(null);
   loadLocalData();
   initializeApp();
@@ -474,6 +532,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
       return;
     }
     setAuthState(data.user);
+    saveAuthCredentials(email, password);
     await loadRemoteData();
     initializeApp();
     authPage.hidden = true;
@@ -498,6 +557,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       return;
     }
     setAuthState(data.user);
+    saveAuthCredentials(email, password);
     await loadRemoteData();
     initializeApp();
     authPage.hidden = true;
