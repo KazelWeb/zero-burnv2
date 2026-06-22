@@ -554,10 +554,32 @@ SPACING:
 ICONS/IMAGES:
 - For any ImageLabel/ImageButton, add a UIAspectRatioConstraint so icons never stretch or distort when the screen resizes.
 
+=== ANTI-OVERLAP RULE FOR SIDE-BY-SIDE OR STACKED ELEMENTS (MANDATORY, ZERO TOLERANCE) ===
+A price label hidden behind a "BUY" button, or any two elements covering each other, is a CRITICAL FAILURE you must never produce. Prevent this with explicit width/height budgeting:
+- Two elements sharing a row (e.g. Price label + Buy button) MUST have their Scale widths sum to ≤ 0.95, leaving a visible gap between them. Anchor one to the LEFT edge and the other to the RIGHT edge so they can NEVER collide regardless of text length:
+  - Left element: AnchorPoint "{0, 0.5}", Position "{0.04, 0, Y, 0}", Size "{0.56, 0, H, 0}"
+  - Right element: AnchorPoint "{1, 0.5}", Position "{0.96, 0, Y, 0}", Size "{0.34, 0, H, 0}"
+- Elements stacked vertically (e.g. Name then Price) MUST have their Y positions spaced at least 0.12-0.18 Scale apart. NEVER give two siblings inside the same container the same Y position.
+- NEVER place a button at the exact same Position as a label it is meant to sit beside — always carve out separate, non-overlapping space for each element before placing it.
+
+=== SHOP / INVENTORY / LEADERBOARD GRID-OF-CARDS RECIPE (MANDATORY FOR ANY REPEATING LIST OF ITEMS) ===
+When asked for a shop, inventory, leaderboard, or any repeating list of cards, build it EXACTLY like this:
+a. Create a ScrollingFrame (e.g. "ItemsContainer") sized to fill most of the body — e.g. Size "{0.94, 0, 0.8, 0}", AnchorPoint "{0.5, 0.5}", Position "{0.5, 0, 0.5, 0}". Set "AutomaticCanvasSize": "Y" and leave "CanvasSize": "{0, 0, 0, 0}" so it grows/shrinks to fit content instead of leaving dead space.
+b. Add a "create_gui" action with className "UIGridLayout" parented INSIDE that ScrollingFrame, with:
+   - "CellSize": "{0.30, 0, 0.42, 0}" (Scale-only — pick XScale ≈ (1 / desiredColumns) - 0.04 so columns fill the width evenly, e.g. 0.30 for 3 columns, 0.46 for 2 columns)
+   - "CellPadding": "{0.02, 0, 0.03, 0}" (Scale-only gap between cards)
+   - "HorizontalAlignment": "Center", "VerticalAlignment": "Top", "SortOrder": "LayoutOrder"
+c. DO NOT set "Size" or "Position" on the individual card Frames themselves — once their parent has a UIGridLayout, the layout automatically controls every card's size and position. Manually setting it will conflict with the layout and cause overlap/misplacement glitches.
+d. Inside EACH card (applying the Anti-Overlap rule above), build top to bottom:
+   - Icon/image holder occupying the TOP ~55-60% of the card: AnchorPoint "{0.5, 0}", Position "{0.5, 0, 0.05, 0}", Size "{0.72, 0, 0.55, 0}".
+   - Name TextLabel directly below it: AnchorPoint "{0.5, 0}", Position "{0.5, 0, 0.63, 0}", Size "{0.92, 0, 0.13, 0}".
+   - A Price label + Buy button row near the bottom using the edge-anchoring pattern from the Anti-Overlap rule, positioned around Y "{*, 0, 0.84, 0}".
+e. Never leave a large empty area under a short list. Keep the outer MainPanel's height proportionate to how much content actually exists — a 3-item shop should use a compact panel sized to fit its content, never one that occupies most of the screen with empty space hanging below it.
+
 5. String formats for Size/Position MUST be EXACTLY like "{0.4, 0, 0.5, 0}" (Scale, 0, Scale, 0) — DO NOT output "UDim2.new(...)" and NEVER use a non-zero Offset value.
 6. String formats for Color3 MUST be EXACTLY like "#FFFFFF" or "255, 255, 255". DO NOT output "Color3.fromRGB(...)".
 7. String formats for AnchorPoint MUST be EXACTLY like "{0.5, 0.5}".
-8. String formats for CornerRadius MUST be EXACTLY like "{0.15, 0}" (Scale preferred). String formats for Padding MAY be EXACTLY like "{0, 8}" (Offset is acceptable ONLY for Padding/CornerRadius/Stroke, never for Size/Position).
+8. String formats for CornerRadius MUST be EXACTLY like "{0.15, 0}" (Scale preferred). String formats for Padding MAY be EXACTLY like "{0, 8}" (Offset is acceptable ONLY for Padding/CornerRadius/Stroke, never for Size/Position). "CellSize" and "CellPadding" on a UIGridLayout MUST ALSO use the Scale-only "{X, 0, Y, 0}" format, exactly like Size/Position — never a pixel/Offset value.
 9. If no actions are needed, leave the "actions" array empty.${userSourcesText}`;
 
   const fullMessages = [
