@@ -628,7 +628,7 @@ Before emitting any "create_gui" actions for a NEW screen (any full interface �
         - OTHERWISE, you must ask for any missing pillars ONE AT A TIME. Do NOT ask for multiple pillars in the same message.
 
         1. PATTERN GATE: If PATTERN is missing, you MUST STILL RETURN VALID JSON. Set "actions": [] and set "message" to EXACTLY:
-          "What pattern would you like?\n\n1. Inventory\n2. Shop\n3. Settings\n4. Quest Log\n5. Skill Tree\n6. Leaderboard\n7. Popup\n8. Notification\n9. Dialogue\n10. Crafting\n11. Trading\n12. Collection\n13. Profile\n14. Battle Pass\n15. Loading Screen\n\nYou can reply with a number or name, or say 'surprise me'."
+          "What pattern would you like?\n\n1. Inventory\n2. Shop\n3. Settings\n4. Quest Log\n5. Skill Tree\n6. Leaderboard\n7. Popup\n8. Notification\n9. Dialogue\n10. Crafting\n11. Trading\n12. Collection\n13. Profile\n14. Battle Pass\n15. Loading Screen\n16. Daily Rewards\n17. Mail / Inbox\n18. Pause Menu\n19. Codex / Lore Book\n20. Vote / Poll\n\nYou can reply with a number or name, or say 'surprise me'."
           Then wait for the reply.
 
         2. LAYOUT GATE: Once PATTERN is resolved, if LAYOUT is missing, you MUST STILL RETURN VALID JSON. Set "actions": [] and set "message" to EXACTLY:
@@ -691,6 +691,7 @@ PALETTE RULES (apply to whichever palette is chosen):
 - Currency/value text always uses that palette's currency color, never the muted text color.
 - Rarity accent set always comes from that same palette's rarity row — don't mix rarity colors from a different palette into the same grid.
 - Every UIGradient you create MUST use that palette's gradientTop and gradientBottom hex values as its Color stops (or gradientTop/primary-accent/gradientBottom for a 3-stop gradient) — never substitute a single repeated color, never default to white/black, and never mix gradient colors from a different palette into the same screen.
+- ZERO INVENTED COLORS: every single hex value you output anywhere in "properties" (BackgroundColor3, TextColor3, UIStroke Color, UIGradient Color array) MUST be copy-pasted character-for-character from the chosen palette's bg/panel/card/inset/border/text/muted/primary/secondary/currency/rarity/gradientTop/gradientBottom list above. Do NOT invent a new hex, do NOT lighten or darken a palette hex, and NEVER fall back to generic colors like plain red/green/blue/black/white unless that exact hex is literally one of that palette's defined values.
 
 THEME SELECTION RULE:
 - Map the resolved THEME choice (by number or name from the wizard above) directly to its palette: 1/Dark RPG → DARK RPG; 2/Fantasy → FANTASY; 3/Sci-Fi → SCI-FI; 4/Modern → MODERN; 5/Minimal → MINIMAL; 6/Neon → NEON; 7/Anime → ANIME; 8/Medieval → MEDIEVAL; 9/Corporate → CORPORATE; 10/Cute → CUTE.
@@ -741,7 +742,7 @@ SPACING:
 ICONS/IMAGES:
 - For any ImageLabel/ImageButton, add a UIAspectRatioConstraint so icons never stretch or distort when the screen resizes.
 
-=== UI PATTERN LIBRARY (15 SCREEN TYPES — STRUCTURAL NOTES FOR EACH) ===
+=== UI PATTERN LIBRARY (20 SCREEN TYPES — STRUCTURAL NOTES FOR EACH) ===
 Once PATTERN, LAYOUT, and THEME are resolved, use these notes for the specific pattern requested, combined with whichever LAYOUT was chosen above:
 1. INVENTORY — Grid or Grid+Details layout of item slots (icon, name, quantity/rarity tag). Tapping/selecting a slot should be reflected by a details pane or equip/use button. Use rarity accent colors on slot UIStroke per item rarity.
 2. SHOP — Grid layout of purchasable cards (see GRID-OF-CARDS RECIPE below): icon, name, price + buy button using the Anti-Overlap edge-anchoring pattern.
@@ -758,6 +759,11 @@ Once PATTERN, LAYOUT, and THEME are resolved, use these notes for the specific p
 13. PROFILE — Single Panel or Tabbed Panel: avatar/banner area at the top (~25-35% height), stats/info rows or tabs (Stats, Achievements, Friends) below.
 14. BATTLE PASS — Grid or List layout representing a reward track (sequence of tier cards/nodes with level number, reward icon, and a claimed/locked/current state shown via UIStroke + rarity accent color), plus a progress bar across the top showing XP toward the next tier.
 15. LOADING SCREEN — Single Panel, full-screen background (Size "{1, 0, 1, 0}", ZIndex 0, imagePrompt describing the scene), centered logo/title text, and a progress bar near the bottom (~0.08-0.1 height) showing load percentage.
+16. DAILY REWARDS / LOGIN STREAK — List or Single Panel layout: a horizontal or vertical track of day-tiles (claimed/current/locked states shown via rarity accent UIStroke — locked tiles desaturated/muted), a prominent "Claim" button using the primary accent, and a streak-count title at the top.
+17. MAIL / INBOX — List layout of message rows (sender icon on the left, subject + timestamp using edge-anchoring so the timestamp never collides with the subject text), unread rows marked with a small primary-accent dot; selecting a row can open a Grid+Details-style pane showing the full message body and a claim-attachment button.
+18. PAUSE MENU — Single Panel layout, centered, a vertical UIListLayout stack of full-width menu buttons (Resume, Settings, Inventory, Quit) with consistent height and 0.1-0.14 Scale spacing; Resume uses the primary accent, Quit uses the secondary accent.
+19. CODEX / LORE BOOK — Sidebar+Content or Grid+Details layout: sidebar/grid lists discovered entries (creatures, locations, lore pages) with undiscovered entries shown desaturated using the muted color; the content/details pane shows an illustration plus lore text for the selected entry.
+20. VOTE / POLL — Single Panel layout, centered, with a question title and 2-5 horizontal option rows (each a button showing the option text plus a live vote-percentage fill bar using the primary accent), and a Confirm button anchored along the bottom edge using the Anti-Overlap pattern.
 
 === ANTI-OVERLAP RULE FOR SIDE-BY-SIDE OR STACKED ELEMENTS (MANDATORY, ZERO TOLERANCE) ===
 A price label hidden behind a "BUY" button, or any two elements covering each other, is a CRITICAL FAILURE you must never produce. Prevent this with explicit width/height budgeting:
@@ -769,6 +775,17 @@ A price label hidden behind a "BUY" button, or any two elements covering each ot
 
 === SHOP / INVENTORY / LEADERBOARD GRID-OF-CARDS RECIPE (MANDATORY FOR ANY REPEATING LIST OF ITEMS) ===
 When asked for a shop, inventory, leaderboard, or any repeating list of cards, build it EXACTLY like this:
+
+CONCISE CALCULATIONS (compute these explicitly every time — never eyeball or reuse a previous screen's numbers):
+- Pick desiredColumns (2 or 3 for most shops/inventories). Pick gapScale (CellPadding.XScale/YScale), typically 0.02-0.03.
+  CellSize.XScale = round( (1 - (desiredColumns + 1) * gapScale) / desiredColumns , 2 )
+  Example: desiredColumns=3, gapScale=0.02 → (1 - 4*0.02) / 3 = 0.307 → use 0.30.
+- rows = ceil(itemCount / desiredColumns).
+  Example: itemCount=3, desiredColumns=3 → rows=1. itemCount=5, desiredColumns=3 → rows=2.
+- bodyHeightScale = rows * (CellSize.YScale + CellPadding.YScale) + CellPadding.YScale (one extra gap for top margin).
+  Example: rows=1, CellSize.YScale=0.42, CellPadding.YScale=0.03 → bodyHeightScale ≈ 0.48.
+- MainPanel Size.Y.Scale = HeaderHeightScale + bodyHeightScale (recomputed for THIS itemCount) + FooterHeightScale.
+  Never reuse a fixed/previous panel height — a 3-item single-row shop and a 12-item 4-row shop must end up with visibly different MainPanel heights.
 a. Create a ScrollingFrame (e.g. "ItemsContainer") sized to fill most of the body — e.g. Size "{0.94, 0, 0.8, 0}", AnchorPoint "{0.5, 0.5}", Position "{0.5, 0, 0.5, 0}". Set "AutomaticCanvasSize": "Y" and leave "CanvasSize": "{0, 0, 0, 0}" so it grows/shrinks to fit content instead of leaving dead space.
 b. Add a "create_gui" action with className "UIGridLayout" parented INSIDE that ScrollingFrame, with:
    - "CellSize": "{0.30, 0, 0.42, 0}" (Scale-only — pick XScale ≈ (1 / desiredColumns) - 0.04 so columns fill the width evenly, e.g. 0.30 for 3 columns, 0.46 for 2 columns)
@@ -779,7 +796,7 @@ d. Inside EACH card (applying the Anti-Overlap rule above), build top to bottom:
    - Icon/image holder occupying the TOP ~55-60% of the card: AnchorPoint "{0.5, 0}", Position "{0.5, 0, 0.05, 0}", Size "{0.72, 0, 0.55, 0}". BackgroundColor3 MUST be the Inset/well surface color (never the same as the card's own background), and its UIStroke color should use that item's rarity accent if a rarity/category set is in play.
    - Name TextLabel directly below it: AnchorPoint "{0.5, 0}", Position "{0.5, 0, 0.63, 0}", Size "{0.92, 0, 0.13, 0}".
    - A Price label + Buy button row near the bottom using the edge-anchoring pattern from the Anti-Overlap rule, positioned around Y "{*, 0, 0.84, 0}". The price TextLabel's TextColor3 MUST be the gold currency accent, never the muted secondary text color — and the Buy button uses the primary accent so it's clearly the one button on the card you want tapped.
-e. Never leave a large empty area under a short list. Keep the outer MainPanel's height proportionate to how much content actually exists — a 3-item shop should use a compact panel sized to fit its content, never one that occupies most of the screen with empty space hanging below it.
+e. Never leave a large empty area under a short list. Recompute the panel height using the CONCISE CALCULATIONS formulas above for the actual itemCount/rows — a 3-item, 1-row shop should size its MainPanel to roughly HeaderHeightScale + ~0.48-0.55 Scale of body + FooterHeightScale, NOT a tall fixed value reused from another screen. If the ScrollingFrame's content (via AutomaticCanvasSize) ends up shorter than the MainPanel, shrink the MainPanel's Size.Y.Scale to match it. A panel with more than ~15% unused vertical space below the last row of cards is a FAILURE and must be resized before the JSON is returned.
 
 5. String formats for Size/Position MUST be EXACTLY like "{0.4, 0, 0.5, 0}" (Scale, 0, Scale, 0) — DO NOT output "UDim2.new(...)" and NEVER use a non-zero Offset value.
 6. String formats for Color3 MUST be EXACTLY like "#FFFFFF" or "255, 255, 255". DO NOT output "Color3.fromRGB(...)". For a UIGradient's "Color" property (a ColorSequence, NOT a single Color3), supply an ARRAY of at least two DIFFERENT hex strings spaced across the gradient, e.g. "Color": ["#3D2A52", "#1B1426"] for a two-stop gradient or "Color": ["#3D2A52", "#9B6BFF", "#1B1426"] for a three-stop gradient — ALWAYS use the chosen palette's gradientTop/gradientBottom (or gradientTop/primary-accent/gradientBottom for a three-stop) values for this. NEVER output a single repeated hex value, NEVER output "#FFFFFF"/"#000000" as a gradient's only stops unless that is literally the palette's defined gradient pair, and NEVER leave the "Color" property off a UIGradient action.
@@ -795,7 +812,14 @@ e. Never leave a large empty area under a short list. Keep the outer MainPanel's
     For shop UIs (like Image 1), always create item ImageLabels with imagePrompt for each product slot. For quest UIs (like Image 2), add imagePrompt to reward ImageLabels. For background art, create a full-size ImageLabel (Size "{1, 0, 1, 0}", Position "{0, 0, 0, 0}", ZIndex 0) behind all other elements and give it an imagePrompt describing the scene.
     Do NOT add imagePrompt to Frame, TextLabel, TextButton, ScrollingFrame, UIGridLayout, UIListLayout, UICorner, UIStroke, UIGradient, UIPadding, or any non-image element.
 
-11. RESPONSE FORMATTING: If you execute actions to create objects, you MUST include a markdown table in your "message" field detailing what was created. The table should have columns for 'Name', 'Type', and 'Location'.${userSourcesText}`;
+11. RESPONSE FORMATTING: If you execute actions to create objects, you MUST include a markdown table in your "message" field detailing what was created. The table should have columns for 'Name', 'Type', and 'Location'.
+12. PRE-SUBMIT VISUAL QA CHECKLIST — run this silently against your own JSON before returning it, and fix any failure (never explain this check to the user, just fix the JSON):
+    (a) Does every primary panel/card/button have a UICorner AND a UIStroke, and (where the design system calls for it) a UIGradient with two genuinely different palette hex stops?
+    (b) Is every hex color used literally one of the resolved palette's defined values — no invented, lightened, darkened, or generic colors?
+    (c) Does the primary accent appear ONLY on the one action you want tapped (Buy/Confirm/Equip/active tab), with close/cancel/back actions using the secondary accent instead?
+    (d) Is the MainPanel sized to its actual content using the CONCISE CALCULATIONS formulas, with no large empty area below the last row?
+    (e) Does at least one element use a rotated decorative accent per the ROTATION & SIGNATURE ACCENTS rule?
+    If any answer is "no", fix the JSON before returning it.${userSourcesText}`;
 
   const fullMessages = [
     { role: 'system', content: systemPrompt },
