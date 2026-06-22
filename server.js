@@ -61,6 +61,13 @@ async function ensureDatabase() {
       mime_type TEXT NOT NULL DEFAULT 'image/png',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS ai_jobs (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      result JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
   await pool.query(`
     ALTER TABLE user_data ADD COLUMN IF NOT EXISTS pending_image TEXT;
@@ -612,15 +619,17 @@ app.post('/api/roblox/data', async (req, res) => {
 });
 
 app.post('/api/roblox', async (req, res) => {
-  const { prompt, history = [], email, password, image } = req.body;
+  const { prompt, history = [], email, password, image, jobId } = req.body;
 
   let userSourcesText = "";
+  let authUser = null;
   if (email && password) {
     try {
       const lowerEmail = email.toLowerCase();
       const result = await pool.query('SELECT id, password_hash FROM users WHERE email = $1', [lowerEmail]);
       const user = result.rows[0];
       if (user && await bcrypt.compare(password, user.password_hash)) {
+        authUser = user;
         const userData = await loadUserData(user.id);
         if (userData.sources && userData.sources.length > 0) {
           userSourcesText = "\n\nUSER SOURCES (Use these as context):\n" + userData.sources.map(s => `[${s.name}]\n${s.content}`).join('\n\n');
@@ -630,7 +639,31 @@ app.post('/api/roblox', async (req, res) => {
       }
     } catch (err) {
       console.error("[Roblox Auth Error]:", err);
+      return res.status(500).json({ error: "Auth Error", message: "Auth Error", actions: [] });
     }
+  }
+
+  if (jobId && authUser) {
+    const jobRes = await pool.query('SELECT status, result FROM ai_jobs WHERE id = $1 AND user_id = $2', [jobId, authUser.id]);
+    if (jobRes.rows.length > 0) {
+      const job = jobRes.rows[0];
+      if (job.status === 'completed') {
+        return res.json(job.result);
+      } else if (job.status === 'error') {
+        return res.status(500).json(job.result);
+      } else {
+        for (let i = 0; i < 10; i++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const check = await pool.query('SELECT status, result FROM ai_jobs WHERE id = $1', [jobId]);
+          if (check.rows.length > 0) {
+            if (check.rows[0].status === 'completed') return res.json(check.rows[0].result);
+            if (check.rows[0].status === 'error') return res.status(500).json(check.rows[0].result);
+          }
+        }
+        return res.status(202).json({ status: 'pending' });
+      }
+    }
+    await pool.query('INSERT INTO ai_jobs (id, user_id, status) VALUES ($1, $2, $3)', [jobId, authUser.id, 'pending']);
   }
 
   // We force the AI to act as a Roblox Studio assistant and return strict JSON.
@@ -977,11 +1010,18 @@ e. Never leave a large empty area under a short list. Recompute the panel height
       }
     }
 
+    if (jobId && authUser) {
+      await pool.query('UPDATE ai_jobs SET status = $1, result = $2 WHERE id = $3', ['completed', JSON.stringify(parsedResponse), jobId]);
+    }
     res.json(parsedResponse);
 
   } catch (err) {
     console.error("[Roblox API Error]:", err);
-    res.status(500).json({ error: err.message, message: "Internal Server Error", actions: [] });
+    const errResult = { error: err.message, message: "Internal Server Error", actions: [] };
+    if (jobId && authUser) {
+      await pool.query('UPDATE ai_jobs SET status = $1, result = $2 WHERE id = $3', ['error', JSON.stringify(errResult), jobId]);
+    }
+    res.status(500).json(errResult);
   }
 });
 
