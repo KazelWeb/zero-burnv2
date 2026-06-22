@@ -1,0 +1,6 @@
+local isSyncing = false
+local pollingLoop = false
+local activeSourceId = nil
+local lastSyncHash = ""
+local addChatMessage
+local renderCheckedSources

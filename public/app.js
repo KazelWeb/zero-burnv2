@@ -283,6 +283,7 @@ function setAuthState(userData) {
   sendBtn.disabled = !isLoggedIn;
 
   if (!isLoggedIn) {
+    if (pollingInterval) clearInterval(pollingInterval);
     chats = [];
     sources = [];
     currentChatId = null;
@@ -290,6 +291,8 @@ function setAuthState(userData) {
     chatLog.innerHTML = '<div class="placeholder">Please login to view or create chats.</div>';
     renderChatHistory('');
     renderSourcesSidebarList();
+  } else {
+    startPolling();
   }
 }
 
@@ -316,6 +319,69 @@ async function loadRemoteData() {
 }
 
 let remoteSyncTimer = null;
+let isSyncing = false;
+let pollingInterval = null;
+
+function startPolling() {
+  if (pollingInterval) clearInterval(pollingInterval);
+  pollingInterval = setInterval(async () => {
+    if (!user || isSyncing) return;
+    try {
+      const res = await fetch('/api/data');
+      if (!res.ok) return;
+      const data = await res.json();
+      const remoteChats = Array.isArray(data.chats) ? data.chats : [];
+      const remoteSources = Array.isArray(data.sources) ? data.sources : [];
+
+      const localChatsStr = JSON.stringify(chats);
+      const remoteChatsStr = JSON.stringify(remoteChats);
+      const localSourcesStr = JSON.stringify(sources);
+      const remoteSourcesStr = JSON.stringify(remoteSources);
+
+      let needsRender = false;
+
+      if (localChatsStr !== remoteChatsStr) {
+        chats = remoteChats;
+        localStorage.setItem('zb_chats', remoteChatsStr);
+        needsRender = true;
+      }
+
+      if (localSourcesStr !== remoteSourcesStr) {
+        sources = remoteSources;
+        localStorage.setItem('zb_sources', remoteSourcesStr);
+        needsRender = true;
+      }
+
+      if (needsRender) {
+        renderChatHistory(chatSearch.value);
+        renderSourcesSidebarList();
+        renderSourcesPreview();
+        if (currentChatId) {
+          const activeChat = chats.find(c => c.id === currentChatId);
+          if (activeChat) {
+            history = activeChat.messages.slice();
+            chatLog.innerHTML = introHtml();
+            history.forEach(msg => {
+              if (typeof msg.content === 'string') {
+                addMessage(msg.role, msg.content);
+              } else if (Array.isArray(msg.content)) {
+                const textPart = msg.content.find(p => p.type === 'text');
+                const imagePart = msg.content.find(p => p.type === 'image_url');
+                addMessage(msg.role, textPart ? textPart.text : '', imagePart ? imagePart.image_url.url : null);
+              }
+            });
+          } else {
+            currentChatId = null;
+            history = [];
+            chatLog.innerHTML = '<div class="placeholder">Chat deleted.</div>';
+          }
+        }
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, 3000);
+}
 
 function scheduleRemoteSync() {
   if (!user) return;
@@ -325,6 +391,7 @@ function scheduleRemoteSync() {
 
 async function syncRemoteData() {
   if (!user) return;
+  isSyncing = true;
   try {
     await fetch('/api/data', {
       method: 'POST',
@@ -334,6 +401,8 @@ async function syncRemoteData() {
     remoteSyncTimer = null;
   } catch (err) {
     console.warn('[auth] sync failed:', err.message);
+  } finally {
+    isSyncing = false;
   }
 }
 
