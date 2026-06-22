@@ -421,27 +421,6 @@ async function fetchAuthStatus() {
       setAuthState(data.user);
       await loadRemoteData();
     } else {
-      const savedAuth = localStorage.getItem('zb_auth');
-      if (savedAuth) {
-        try {
-          const { email, password } = JSON.parse(savedAuth);
-          if (email && password) {
-            const loginRes = await fetch('/auth/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, password })
-            });
-            const loginData = await loginRes.json();
-            if (loginRes.ok && loginData.authenticated) {
-              setAuthState(loginData.user);
-              await loadRemoteData();
-              return;
-            }
-          }
-        } catch (e) {
-          console.warn('[auth] auto-login failed:', e.message);
-        }
-      }
       setAuthState(null);
       loadLocalData();
     }
@@ -460,7 +439,6 @@ async function logout() {
   } catch (err) {
     console.warn('[auth] logout failed:', err.message);
   }
-  localStorage.removeItem('zb_auth');
   setAuthState(null);
   loadLocalData();
   initializeApp();
@@ -495,7 +473,6 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
       alert(data.error || 'Registration failed');
       return;
     }
-    localStorage.setItem('zb_auth', JSON.stringify({ email, password }));
     setAuthState(data.user);
     await loadRemoteData();
     initializeApp();
@@ -520,7 +497,6 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       alert(data.error || 'Login failed');
       return;
     }
-    localStorage.setItem('zb_auth', JSON.stringify({ email, password }));
     setAuthState(data.user);
     await loadRemoteData();
     initializeApp();
