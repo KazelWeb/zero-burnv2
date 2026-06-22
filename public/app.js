@@ -756,19 +756,26 @@ function handleImageFile(file) {
     pendingImage = { dataUrl: reader.result };
     attachPreview.hidden = false;
     attachPreview.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'attach-preview-item';
+    
     const img = document.createElement('img');
     img.src = reader.result;
+    
     const remove = document.createElement('button');
     remove.className = 'remove-attach';
-    remove.textContent = 'remove';
+    remove.innerHTML = '&times;';
     remove.type = 'button';
+    remove.title = 'Remove image';
     remove.onclick = () => {
       pendingImage = null;
       attachPreview.hidden = true;
       fileInput.value = '';
     };
-    attachPreview.appendChild(img);
-    attachPreview.appendChild(remove);
+    
+    wrap.appendChild(img);
+    wrap.appendChild(remove);
+    attachPreview.appendChild(wrap);
   };
   reader.readAsDataURL(file);
 }
