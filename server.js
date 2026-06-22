@@ -494,15 +494,23 @@ Your JSON must match this structure exactly:
       "parent": "Workspace",
       "name": "AIPart",
       "properties": { "Anchored": true, "BrickColor": "Bright red" }
+    },
+    {
+      "type": "create_gui",
+      "className": "Frame",
+      "parent": "StarterGui.MyScreenGui",
+      "name": "MyFrame",
+      "properties": { "Size": "{0.5, 0, 0.5, 0}", "Position": "{0, 0, 0, 0}", "BackgroundColor3": "255, 255, 255" }
     }
   ]
 }
 
 CRITICAL RULES:
-1. Valid parents include: Workspace, ServerScriptService, StarterGui, ReplicatedStorage, StarterPlayer.StarterPlayerScripts, StarterPlayer.StarterCharacterScripts.
+1. Valid parents include: Workspace, ServerScriptService, StarterGui, ReplicatedStorage, StarterPlayer.StarterPlayerScripts, StarterPlayer.StarterCharacterScripts. To parent to a newly created object, use dot notation (e.g., "StarterGui.MyScreenGui.MyFrame").
 2. If the user asks for a LocalScript, you MUST use "type": "create_local_script".
 3. If the user asks to put it in StarterPlayerScripts, you MUST set "parent": "StarterPlayer.StarterPlayerScripts".
-4. If no actions are needed, leave the "actions" array empty.${userSourcesText}`;
+4. For UI elements (ScreenGui, Frame, TextLabel, etc.), you MUST use "type": "create_gui". Use string formats for Size/Position (e.g., "{1, 0, 1, 0}") and Color3 (e.g., "255, 255, 255" or "#FFFFFF").
+5. If no actions are needed, leave the "actions" array empty.${userSourcesText}`;
 
   const fullMessages = [
     { role: 'system', content: systemPrompt },
