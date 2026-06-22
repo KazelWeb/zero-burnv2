@@ -602,17 +602,37 @@ CRITICAL RULES:
 === PROFESSIONAL UI/UX DESIGN SYSTEM (MANDATORY) ===
 You are designing UI that must look "ready-for-game" / shippable in a real, polished Roblox experience — never a rough prototype. Apply this design system on every "create_gui" request:
 
-COLOR PALETTE (use one coherent, HIGH-CONTRAST palette — dark-mode by default unless the user asks otherwise; flat near-identical dark tones between layers are a FAILURE):
-- Background base: "#0B0D12" (darkest layer, behind everything)
-- Panel surface: "#181C25" (must read as visibly lighter than the background — at least 3 perceptible steps up)
-- Raised/card surface: "#232838" (visibly lighter than the panel — this is what individual cards/rows sit on)
-- Inset/well surface (icon holders, input fields, progress-bar tracks): "#2C3245" (the lightest neutral surface, so icon slots and inputs never look like an empty black hole)
-- Border/Divider: "#363D52"
-- Primary text: "#F5F6FA" / Secondary/muted text: "#9AA3B8"
-- Primary accent (the single most important CTA — Buy, Confirm, active tab): pick ONE vibrant hue, e.g. "#5B8CFF" (blue), "#FF7A45" (orange), "#3DDC97" (green).
-- Secondary accent (close/cancel/dismiss buttons, secondary actions, toggles): a DIFFERENT hue or a desaturated neutral, e.g. "#4A5468" (slate) or "#3FB8AF" (teal) if primary is blue. NEVER reuse the primary accent color on a close ("X") or cancel button — that destroys the visual hierarchy between "the action I want you to take" and "get me out of here."
-- Currency/value accent: a warm gold "#FFC94D" for any coin/gem/price text. Currency numbers must always use this gold accent, never plain muted gray — players scan for price first.
-- Category/rarity accent set (use when showing a grid of items — shop, inventory, leaderboard): rotate a thin border + icon-holder tint per item from a small fixed set, e.g. common "#8B92A6", uncommon "#3DDC97", rare "#5B8CFF", epic "#B16CEA", legendary "#FFC94D". This is what makes a multi-item grid read as varied and alive instead of every card looking like a clone.
+COLOR PALETTE — CHOOSE FROM THIS LIBRARY (do NOT invent your own colors from scratch, and do NOT default to the same palette every time — see SELECTION RULE below). Every palette keeps the same structural roles (background < panel < card < inset, in ascending lightness) but with totally different hues so output actually varies:
+
+1. CYBER NEON (sci-fi, futuristic, tech, hacking): bg "#0A0612", panel "#160E26", card "#231539", inset "#301C4D", border "#4A2E73", text "#F3EBFF" / muted "#A98FD1", primary accent "#FF2EC4" (magenta), secondary accent "#2EE6FF" (cyan), currency "#FFE94D", rarity: common "#7C6A99", uncommon "#2EE6FF", rare "#9B5CFF", epic "#FF2EC4", legendary "#FFE94D".
+
+2. SUNSET ARCADE (fun, casual, retro games, carnival): bg "#1A0E14", panel "#2A1620", card "#3D1F2C", inset "#4F2838", border "#6B3548", text "#FFF3EC" / muted "#D9A99B", primary accent "#FF6B5B" (coral), secondary accent "#FFB84D" (amber), currency "#FFD23F", rarity: common "#C98B7D", uncommon "#4DD9A8", rare "#FF6B5B", epic "#C75CFF", legendary "#FFD23F".
+
+3. TOXIC SLIME (spooky, monsters, swamp, villain lairs): bg "#0C0F08", panel "#161D0E", card "#212B14", inset "#2D3A1A", border "#445522", text "#EEFBD8" / muted "#A6BB80", primary accent "#9AFF3D" (acid lime), secondary accent "#6B4FA0" (dark violet), currency "#FFD23F", rarity: common "#7A8A5C", uncommon "#9AFF3D", rare "#6B4FA0", epic "#FF4D9E", legendary "#FFD23F".
+
+4. ROYAL FANTASY (medieval, RPG, kingdoms, quests): bg "#0E0A14", panel "#1B1426", card "#291D3B", inset "#372750", border "#4F3873", text "#F5EFFF" / muted "#B2A0D9", primary accent "#9B6BFF" (royal violet), secondary accent "#5C5470" (muted plum-gray), currency "#FFC94D" (gold), rarity: common "#8E84A8", uncommon "#5FB87A", rare "#5B8CFF", epic "#9B6BFF", legendary "#FFC94D".
+
+5. OCEAN DEPTHS (underwater, pirates, exploration): bg "#061218", panel "#0D1F29", card "#142D3B", inset "#1B3B4D", border "#28526A", text "#E8F7FB" / muted "#8FB8C9", primary accent "#2ED1C9" (teal), secondary accent "#4A6B8A" (steel blue), currency "#FFC94D", rarity: common "#6E94A6", uncommon "#2ED1C9", rare "#4D9BFF", epic "#A45BFF", legendary "#FFC94D".
+
+6. CANDY POP (cute, cozy, kids, pets, bubblegum): bg "#170D17", panel "#271528", card "#391E3C", inset "#4C2750", border "#6B3870", text "#FFF0FA" / muted "#D9A8D4", primary accent "#FF5DA2" (bubblegum pink), secondary accent "#7BE0C4" (mint), currency "#FFD23F", rarity: common "#C99BC6", uncommon "#7BE0C4", rare "#A06BFF", epic "#FF5DA2", legendary "#FFD23F".
+
+7. INFERNO (combat, demons, lava, boss fights): bg "#140505", panel "#260C0C", card "#3A1212", inset "#4F1A1A", border "#702424", text "#FFEFE8" / muted "#D9978A", primary accent "#FF4422" (fire red-orange), secondary accent "#5C4530" (charred bronze), currency "#FFC94D", rarity: common "#A66B5C", uncommon "#FF9A3D", rare "#FF4422", epic "#B30F4F", legendary "#FFC94D".
+
+8. FOREST GROVE (nature, druids, farming, survival): bg "#0A1208", panel "#13200F", card "#1E2E18", inset "#2A3F21", border "#3E5A2F", text "#EEF7E6" / muted "#A0BD8C", primary accent "#5FB85B" (emerald), secondary accent "#8A6B45" (warm wood brown), currency "#FFC94D", rarity: common "#8AA374", uncommon "#5FB85B", rare "#4D9BFF", epic "#C99B45", legendary "#FFC94D".
+
+9. FROSTBITE (winter, ice, snow, holiday): bg "#080D14", panel "#101A26", card "#192638", inset "#22344A", border "#33496B", text "#EEF6FF" / muted "#9BB4D1", primary accent "#5EC8FF" (ice blue), secondary accent "#B8C4D4" (frost silver), currency "#FFC94D", rarity: common "#8398B3", uncommon "#7FE8D4", rare "#5EC8FF", epic "#A98CFF", legendary "#FFC94D".
+
+10. DESERT GOLD (western, ancient ruins, treasure hunting): bg "#150F08", panel "#241B10", card "#352718", inset "#473420", border "#664A2C", text "#FBF1E0" / muted "#C7A879", primary accent "#E0A23D" (terracotta gold), secondary accent "#4DA8A0" (turquoise), currency "#FFD23F", rarity: common "#A98F66", uncommon "#4DA8A0", rare "#E0A23D", epic "#B0573D", legendary "#FFD23F".
+
+PALETTE RULES (apply to whichever palette is chosen):
+- Background < Panel < Card < Inset must always ascend in lightness within that palette, exactly like the structural roles already defined.
+- Primary accent = the one button/state you want the player to act on (Buy, Confirm, Equip, active tab). Secondary accent = close/cancel/back/dismiss. NEVER use the same color for both.
+- Currency/value text always uses that palette's currency color, never the muted text color.
+- Rarity accent set always comes from that same palette's rarity row — don't mix rarity colors from a different palette into the same grid.
+
+SELECTION RULE:
+- If the user's request contains theme/mood language, pick the closest-matching palette: sci-fi/futuristic/hacking → Cyber Neon; arcade/casual/retro/carnival → Sunset Arcade; spooky/swamp/villain/poison → Toxic Slime; medieval/RPG/kingdom/quest → Royal Fantasy; underwater/pirate/ocean → Ocean Depths; cute/cozy/kids/pet → Candy Pop; combat/demon/lava/boss → Inferno; nature/farming/survival/druid → Forest Grove; winter/ice/holiday → Frostbite; western/desert/ruins/treasure → Desert Gold.
+- If no theme is stated, DO NOT default to the same palette every time. Rotate across the library so that repeated generic requests (shop, inventory, settings menu, leaderboard) in the same conversation don't all converge on the same look — treat each ungrounded request as an opportunity to pick a different palette than the last one you used.
 
 STRUCTURE & HIERARCHY:
 - Every screen starts with a ScreenGui, then a root "MainPanel" Frame sized/positioned with Scale and centered via AnchorPoint "{0.5, 0.5}" + Position "{0.5, 0, 0.5, 0}".
