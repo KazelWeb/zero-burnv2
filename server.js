@@ -558,7 +558,7 @@ app.post('/api/roblox/data', async (req, res) => {
 });
 
 app.post('/api/roblox', async (req, res) => {
-  const { prompt, history = [], email, password } = req.body;
+  const { prompt, history = [], email, password, image } = req.body;
 
   let userSourcesText = "";
   if (email && password) {
@@ -821,10 +821,18 @@ e. Never leave a large empty area under a short list. Recompute the panel height
     (e) Does at least one element use a rotated decorative accent per the ROTATION & SIGNATURE ACCENTS rule?
     If any answer is "no", fix the JSON before returning it.${userSourcesText}`;
 
+  let userContent = prompt;
+  if (image) {
+    userContent = [
+      { type: 'text', text: prompt || 'What is in this image?' },
+      { type: 'image_url', image_url: { url: image } }
+    ];
+  }
+
   const fullMessages = [
     { role: 'system', content: systemPrompt },
     ...history,
-    { role: 'user', content: prompt }
+    { role: 'user', content: userContent }
   ];
 
   try {
