@@ -110,6 +110,42 @@ function normalizeForCompare(str) {
     .trim();
 }
 
+// Repairs JSON that has raw (unescaped) newlines/tabs/carriage-returns inside
+// string literals — a common failure mode when the model embeds a markdown
+// table or multi-line text inside the "message" field without escaping it.
+// Only characters INSIDE a quoted string are touched; structural whitespace
+// between JSON tokens (which JSON.parse already tolerates) is left as-is.
+function sanitizeJsonNewlines(text) {
+  let result = '';
+  let inString = false;
+  let escapeNext = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escapeNext) {
+      result += ch;
+      escapeNext = false;
+      continue;
+    }
+    if (ch === '\\') {
+      result += ch;
+      escapeNext = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === '\n') { result += '\\n'; continue; }
+      if (ch === '\r') { result += '\\r'; continue; }
+      if (ch === '\t') { result += '\\t'; continue; }
+    }
+    result += ch;
+  }
+  return result;
+}
+
 app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -801,27 +837,26 @@ e. Never leave a large empty area under a short list. Keep the outer MainPanel's
 
     let content = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content.trim() : "";
 
-    // Strip markdown formatting if the AI accidentally includes it
-    if (content.startsWith('```json')) {
-      content = content.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+    // Strip a fenced ```json ... ``` block wherever it appears (not just at the start —
+    // the model sometimes prepends plain text like "Primary: #..., Secondary: #...").
+    const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) {
+      content = fenceMatch[1].trim();
     }
 
-    // Try to extract JSON if there's text outside it
+    // Narrow down to the outermost JSON object boundaries, in case there's
+    // still leading/trailing text outside the fence.
     const jsonStart = content.indexOf('{');
     const jsonEnd = content.lastIndexOf('}');
     if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-      let possibleJson = content.substring(jsonStart, jsonEnd + 1);
-      try {
-        let parsed = JSON.parse(possibleJson);
-        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-          content = possibleJson;
-        }
-      } catch (e) {
-        // Ignore and let the normal flow handle it
-      }
+      content = content.substring(jsonStart, jsonEnd + 1);
     }
 
-// Parse to ensure it's valid JSON before sending to Roblox
+    // Parse to ensure it's valid JSON before sending to Roblox.
+    // If the first attempt fails (most commonly because the model embedded a
+    // markdown table / multi-line text in "message" with raw, unescaped
+    // newlines), retry once with sanitized newlines before giving up — this
+    // is what was previously causing actions to silently come back empty.
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(content);
@@ -829,7 +864,17 @@ e. Never leave a large empty area under a short list. Keep the outer MainPanel's
         parsedResponse = { message: String(content), actions: [] };
       }
     } catch (parseErr) {
-      parsedResponse = { message: content, actions: [] };
+      try {
+        const repaired = sanitizeJsonNewlines(content);
+        parsedResponse = JSON.parse(repaired);
+        if (typeof parsedResponse !== 'object' || parsedResponse === null || Array.isArray(parsedResponse)) {
+          parsedResponse = { message: String(content), actions: [] };
+        }
+        console.warn('[Roblox] JSON required newline repair to parse successfully.');
+      } catch (repairErr) {
+        console.error('[Roblox] JSON parse failed even after repair:', repairErr.message);
+        parsedResponse = { message: content, actions: [] };
+      }
     }
 
     res.json(parsedResponse);
