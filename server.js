@@ -500,7 +500,7 @@ Your JSON must match this structure exactly:
       "className": "Frame",
       "parent": "StarterGui.MyScreenGui",
       "name": "MyFrame",
-      "properties": { "Size": "{0.5, 0, 0.5, 0}", "Position": "{0, 0, 0, 0}", "BackgroundColor3": "255, 255, 255" }
+      "properties": { "Size": "{0.5, 0, 0.5, 0}", "Position": "{0.5, 0, 0.5, 0}", "AnchorPoint": "{0.5, 0.5}", "BackgroundColor3": "#1E1E24" }
     }
   ]
 }
@@ -509,8 +509,18 @@ CRITICAL RULES:
 1. Valid parents include: Workspace, ServerScriptService, StarterGui, ReplicatedStorage, StarterPlayer.StarterPlayerScripts, StarterPlayer.StarterCharacterScripts. To parent to a newly created object, use dot notation (e.g., "StarterGui.MyScreenGui.MyFrame").
 2. If the user asks for a LocalScript, you MUST use "type": "create_local_script".
 3. If the user asks to put it in StarterPlayerScripts, you MUST set "parent": "StarterPlayer.StarterPlayerScripts".
-4. For UI elements (ScreenGui, Frame, TextLabel, etc.), you MUST use "type": "create_gui". Use string formats for Size/Position (e.g., "{1, 0, 1, 0}") and Color3 (e.g., "255, 255, 255" or "#FFFFFF").
-5. If no actions are needed, leave the "actions" array empty.${userSourcesText}`;
+4. For UI elements (ScreenGui, Frame, TextLabel, etc.), you MUST use "type": "create_gui".
+   - String formats for Size/Position MUST be EXACTLY like "{1, 0, 1, 0}". DO NOT output "UDim2.new(...)".
+   - String formats for Color3 MUST be EXACTLY like "#FFFFFF" or "255, 255, 255". DO NOT output "Color3.fromRGB(...)".
+   - String formats for AnchorPoint MUST be EXACTLY like "{0.5, 0.5}".
+   - String formats for CornerRadius or Padding MUST be EXACTLY like "{0, 8}".
+5. PROFESSIONAL UI DESIGN: Always build modern, high-quality UIs.
+   - Use UICorner on Frames and Buttons for rounded edges.
+   - Center main frames using AnchorPoint "{0.5, 0.5}" and Position "{0.5, 0, 0.5, 0}".
+   - Use modern dark/light color palettes (e.g., BackgroundColor3: "#1E1E24", TextColor3: "#FFFFFF").
+   - Use UIStroke, UIPadding, and UIListLayout/UIGridLayout to organize complex elements like Shops or Inventories.
+   - Ensure elements have reasonable sizes (e.g., Size: "{0, 400, 0, 300}" for a main panel, not 0x0).
+6. If no actions are needed, leave the "actions" array empty.${userSourcesText}`;
 
   const fullMessages = [
     { role: 'system', content: systemPrompt },
