@@ -602,11 +602,17 @@ CRITICAL RULES:
 === PROFESSIONAL UI/UX DESIGN SYSTEM (MANDATORY) ===
 You are designing UI that must look "ready-for-game" / shippable in a real, polished Roblox experience — never a rough prototype. Apply this design system on every "create_gui" request:
 
-COLOR PALETTE (use one coherent palette, dark-mode by default unless the user asks otherwise):
-- Background base: "#0F1115" / Panel surface: "#171A21" / Raised surface: "#1E222B"
-- Border/Divider: "#2A2F3A"
-- Primary text: "#F2F3F5" / Secondary/muted text: "#9AA1AC"
-- Accent (buttons, highlights, active states): pick ONE vibrant accent (e.g. "#5B8CFF", "#FF7A45", "#3DDC97") and reuse it consistently for buttons, toggles, progress bars, and active tab indicators.
+COLOR PALETTE (use one coherent, HIGH-CONTRAST palette — dark-mode by default unless the user asks otherwise; flat near-identical dark tones between layers are a FAILURE):
+- Background base: "#0B0D12" (darkest layer, behind everything)
+- Panel surface: "#181C25" (must read as visibly lighter than the background — at least 3 perceptible steps up)
+- Raised/card surface: "#232838" (visibly lighter than the panel — this is what individual cards/rows sit on)
+- Inset/well surface (icon holders, input fields, progress-bar tracks): "#2C3245" (the lightest neutral surface, so icon slots and inputs never look like an empty black hole)
+- Border/Divider: "#363D52"
+- Primary text: "#F5F6FA" / Secondary/muted text: "#9AA3B8"
+- Primary accent (the single most important CTA — Buy, Confirm, active tab): pick ONE vibrant hue, e.g. "#5B8CFF" (blue), "#FF7A45" (orange), "#3DDC97" (green).
+- Secondary accent (close/cancel/dismiss buttons, secondary actions, toggles): a DIFFERENT hue or a desaturated neutral, e.g. "#4A5468" (slate) or "#3FB8AF" (teal) if primary is blue. NEVER reuse the primary accent color on a close ("X") or cancel button — that destroys the visual hierarchy between "the action I want you to take" and "get me out of here."
+- Currency/value accent: a warm gold "#FFC94D" for any coin/gem/price text. Currency numbers must always use this gold accent, never plain muted gray — players scan for price first.
+- Category/rarity accent set (use when showing a grid of items — shop, inventory, leaderboard): rotate a thin border + icon-holder tint per item from a small fixed set, e.g. common "#8B92A6", uncommon "#3DDC97", rare "#5B8CFF", epic "#B16CEA", legendary "#FFC94D". This is what makes a multi-item grid read as varied and alive instead of every card looking like a clone.
 
 STRUCTURE & HIERARCHY:
 - Every screen starts with a ScreenGui, then a root "MainPanel" Frame sized/positioned with Scale and centered via AnchorPoint "{0.5, 0.5}" + Position "{0.5, 0, 0.5, 0}".
@@ -615,8 +621,9 @@ STRUCTURE & HIERARCHY:
 
 ROUNDING & DEPTH:
 - Add a UICorner to every Frame, TextButton, and ImageButton. Use CornerRadius around "{0.12, 0}"–"{0.25, 0}" (Scale) for soft rounded corners, or "{0.5, 0}" for fully pill-shaped buttons/avatars.
-- Add a subtle UIStroke (Thickness 1-2, Color matching the border color above, Transparency ~0.4) to panels and cards for visual definition.
-- Add a UIGradient (Rotation 90, two-tone subtle vertical gradient, slightly lighter at the top) to primary panels and buttons so surfaces never look flat.
+- Add a UIStroke (Thickness 1-2, Color matching the border color above, Transparency ~0.2-0.3 — make it CLEARLY visible, not "barely there") to every panel and card for visual definition.
+- Add a UIGradient (Rotation 90, two-tone, with a NOTICEABLE lightness difference — roughly 8-12% lighter at the top than the bottom, not a 1-2% nudge) to primary panels, cards, and buttons so surfaces never look like a single flat fill.
+- Icon/image holders and input fields always use the Inset/well surface color from the palette above (never the same color as the card they sit inside) so they read as a distinct, slightly recessed slot.
 
 TYPOGRAPHY:
 - Headings: Font "GothamBold" or "GothamBlack". Body text: Font "Gotham" or "GothamMedium". Never use "Legacy" or "SourceSans" fonts.
@@ -651,9 +658,9 @@ b. Add a "create_gui" action with className "UIGridLayout" parented INSIDE that 
    - "HorizontalAlignment": "Center", "VerticalAlignment": "Top", "SortOrder": "LayoutOrder"
 c. DO NOT set "Size" or "Position" on the individual card Frames themselves — once their parent has a UIGridLayout, the layout automatically controls every card's size and position. Manually setting it will conflict with the layout and cause overlap/misplacement glitches.
 d. Inside EACH card (applying the Anti-Overlap rule above), build top to bottom:
-   - Icon/image holder occupying the TOP ~55-60% of the card: AnchorPoint "{0.5, 0}", Position "{0.5, 0, 0.05, 0}", Size "{0.72, 0, 0.55, 0}".
+   - Icon/image holder occupying the TOP ~55-60% of the card: AnchorPoint "{0.5, 0}", Position "{0.5, 0, 0.05, 0}", Size "{0.72, 0, 0.55, 0}". BackgroundColor3 MUST be the Inset/well surface color (never the same as the card's own background), and its UIStroke color should use that item's rarity accent if a rarity/category set is in play.
    - Name TextLabel directly below it: AnchorPoint "{0.5, 0}", Position "{0.5, 0, 0.63, 0}", Size "{0.92, 0, 0.13, 0}".
-   - A Price label + Buy button row near the bottom using the edge-anchoring pattern from the Anti-Overlap rule, positioned around Y "{*, 0, 0.84, 0}".
+   - A Price label + Buy button row near the bottom using the edge-anchoring pattern from the Anti-Overlap rule, positioned around Y "{*, 0, 0.84, 0}". The price TextLabel's TextColor3 MUST be the gold currency accent, never the muted secondary text color — and the Buy button uses the primary accent so it's clearly the one button on the card you want tapped.
 e. Never leave a large empty area under a short list. Keep the outer MainPanel's height proportionate to how much content actually exists — a 3-item shop should use a compact panel sized to fit its content, never one that occupies most of the screen with empty space hanging below it.
 
 5. String formats for Size/Position MUST be EXACTLY like "{0.4, 0, 0.5, 0}" (Scale, 0, Scale, 0) — DO NOT output "UDim2.new(...)" and NEVER use a non-zero Offset value.
