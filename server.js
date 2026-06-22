@@ -62,11 +62,15 @@ async function ensureDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await pool.query(`
+    ALTER TABLE user_data ADD COLUMN IF NOT EXISTS pending_image TEXT;
+    ALTER TABLE user_data ADD COLUMN IF NOT EXISTS expecting_paste BOOLEAN DEFAULT FALSE;
+  `).catch(() => {});
 }
 
 async function loadUserData(userId) {
-  const result = await pool.query('SELECT chats, sources FROM user_data WHERE user_id = $1', [userId]);
-  if (!result.rows[0]) return { chats: [], sources: [] };
+  const result = await pool.query('SELECT chats, sources, pending_image, expecting_paste FROM user_data WHERE user_id = $1', [userId]);
+  if (!result.rows[0]) return { chats: [], sources: [], pendingImage: null, expectingPaste: false };
   
   let loadedChats = result.rows[0].chats || [];
   let loadedSources = result.rows[0].sources || [];
@@ -80,16 +84,23 @@ async function loadUserData(userId) {
 
   return {
     chats: loadedChats,
-    sources: loadedSources
+    sources: loadedSources,
+    pendingImage: result.rows[0].pending_image || null,
+    expectingPaste: result.rows[0].expecting_paste || false
   };
 }
 
 async function saveUserData(userId, data) {
   await pool.query(
-    `INSERT INTO user_data (user_id, chats, sources, updated_at)
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (user_id) DO UPDATE SET chats = EXCLUDED.chats, sources = EXCLUDED.sources, updated_at = NOW()`,
-    [userId, JSON.stringify(data.chats || []), JSON.stringify(data.sources || [])]
+    `INSERT INTO user_data (user_id, chats, sources, pending_image, expecting_paste, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET 
+       chats = EXCLUDED.chats, 
+       sources = EXCLUDED.sources, 
+       pending_image = EXCLUDED.pending_image,
+       expecting_paste = EXCLUDED.expecting_paste,
+       updated_at = NOW()`,
+    [userId, JSON.stringify(data.chats || []), JSON.stringify(data.sources || []), data.pendingImage || null, data.expectingPaste || false]
   );
 }
 
@@ -280,16 +291,31 @@ app.get('/api/data', requireAuth, async (req, res) => {
 });
 
 app.post('/api/data', requireAuth, async (req, res) => {
-  const { chats, sources } = req.body;
+  const { chats, sources, pendingImage, expectingPaste } = req.body;
   if (!Array.isArray(chats) || !Array.isArray(sources)) {
     return res.status(400).json({ error: 'Invalid payload' });
   }
   try {
-    await saveUserData(req.user.id, { chats, sources });
+    await saveUserData(req.user.id, { chats, sources, pendingImage, expectingPaste });
     res.json({ success: true });
   } catch (err) {
     console.error('[api/data] save error:', err);
     res.status(500).json({ error: 'Failed to save user data' });
+  }
+});
+
+app.post('/api/upload-image', requireAuth, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image provided' });
+    const imageId = 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    await pool.query(
+      'INSERT INTO generated_images (id, image_data, mime_type) VALUES ($1, $2, $3)',
+      [imageId, req.file.buffer.toString('base64'), req.file.mimetype]
+    );
+    res.json({ imageUrl: BASE_URL + '/api/roblox/image/' + imageId });
+  } catch (err) {
+    console.error('[/api/upload-image] error:', err);
+    res.status(500).json({ error: 'Upload failed' });
   }
 });
 
@@ -535,7 +561,7 @@ app.post('/api/roblox/generate-gui-image', async (req, res) => {
 });
 
 app.post('/api/roblox/data', async (req, res) => {
-  const { email, password, chats, sources } = req.body;
+  const { email, password, chats, sources, pendingImage, expectingPaste } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Missing credentials" });
   try {
     const lowerEmail = email.toLowerCase();
@@ -543,11 +569,11 @@ app.post('/api/roblox/data', async (req, res) => {
     const user = result.rows[0];
     if (user && await bcrypt.compare(password, user.password_hash)) {
       if (chats && sources) {
-        await saveUserData(user.id, { chats, sources });
+        await saveUserData(user.id, { chats, sources, pendingImage, expectingPaste });
         res.json({ success: true });
       } else {
         const userData = await loadUserData(user.id);
-        res.json({ success: true, chats: userData.chats, sources: userData.sources });
+        res.json({ success: true, chats: userData.chats, sources: userData.sources, pendingImage: userData.pendingImage, expectingPaste: userData.expectingPaste });
       }
     } else {
       res.status(401).json({ error: "Invalid credentials" });

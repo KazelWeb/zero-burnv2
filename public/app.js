@@ -38,6 +38,7 @@ let chats = JSON.parse(localStorage.getItem('zb_chats') || '[]');
 let currentChatId = null;
 let viewingArchived = false;
 let contextMenuChatId = null;
+let expectingPaste = false;
 
 function saveChats() {
   if (!user) return;
@@ -310,6 +311,14 @@ async function loadRemoteData() {
     const data = await res.json();
     chats = Array.isArray(data.chats) ? data.chats : [];
     sources = Array.isArray(data.sources) ? data.sources : [];
+    if (data.pendingImage) {
+      pendingImage = { dataUrl: data.pendingImage, publicUrl: data.pendingImage };
+      renderAttachPreview();
+    }
+    if (data.expectingPaste) {
+      expectingPaste = true;
+      showPasteOverlay();
+    }
     localStorage.setItem('zb_chats', JSON.stringify(chats));
     localStorage.setItem('zb_sources', JSON.stringify(sources));
   } catch (err) {
@@ -350,6 +359,22 @@ function startPolling() {
         sources = remoteSources;
         localStorage.setItem('zb_sources', remoteSourcesStr);
         needsRender = true;
+      }
+
+      if (data.pendingImage && (!pendingImage || pendingImage.publicUrl !== data.pendingImage)) {
+        pendingImage = { dataUrl: data.pendingImage, publicUrl: data.pendingImage };
+        if (typeof renderAttachPreview === 'function') renderAttachPreview();
+      } else if (!data.pendingImage && pendingImage && pendingImage.publicUrl) {
+        pendingImage = null;
+        if (typeof renderAttachPreview === 'function') renderAttachPreview();
+      }
+
+      if (data.expectingPaste && !expectingPaste) {
+        expectingPaste = true;
+        if (typeof showPasteOverlay === 'function') showPasteOverlay();
+      } else if (!data.expectingPaste && expectingPaste) {
+        expectingPaste = false;
+        if (typeof hidePasteOverlay === 'function') hidePasteOverlay();
       }
 
       if (needsRender) {
@@ -396,7 +421,12 @@ async function syncRemoteData() {
     await fetch('/api/data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chats, sources })
+      body: JSON.stringify({ 
+        chats, 
+        sources,
+        pendingImage: pendingImage ? (pendingImage.publicUrl || pendingImage.dataUrl) : null,
+        expectingPaste
+      })
     });
     remoteSyncTimer = null;
   } catch (err) {
@@ -749,33 +779,80 @@ let pendingImage = null; // { dataUrl, mime }
 
 attachBtn.addEventListener('click', () => fileInput.click());
 
-function handleImageFile(file) {
+const pasteOverlay = document.getElementById('pasteOverlay');
+const cancelPasteBtn = document.getElementById('cancelPasteBtn');
+
+function showPasteOverlay() {
+  if (pasteOverlay) pasteOverlay.hidden = false;
+}
+
+function hidePasteOverlay() {
+  if (pasteOverlay) pasteOverlay.hidden = true;
+}
+
+if (cancelPasteBtn) {
+  cancelPasteBtn.addEventListener('click', () => {
+    expectingPaste = false;
+    hidePasteOverlay();
+    scheduleRemoteSync();
+  });
+}
+
+function renderAttachPreview() {
+  if (!pendingImage) {
+    attachPreview.hidden = true;
+    attachPreview.innerHTML = '';
+    fileInput.value = '';
+    return;
+  }
+  attachPreview.hidden = false;
+  attachPreview.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'attach-preview-item';
+  
+  const img = document.createElement('img');
+  img.src = pendingImage.dataUrl || pendingImage.publicUrl;
+  
+  const remove = document.createElement('button');
+  remove.className = 'remove-attach';
+  remove.innerHTML = '&times;';
+  remove.type = 'button';
+  remove.title = 'Remove image';
+  remove.onclick = () => {
+    pendingImage = null;
+    renderAttachPreview();
+    scheduleRemoteSync();
+  };
+  
+  wrap.appendChild(img);
+  wrap.appendChild(remove);
+  attachPreview.appendChild(wrap);
+}
+
+async function handleImageFile(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     pendingImage = { dataUrl: reader.result };
-    attachPreview.hidden = false;
-    attachPreview.innerHTML = '';
-    const wrap = document.createElement('div');
-    wrap.className = 'attach-preview-item';
+    renderAttachPreview();
     
-    const img = document.createElement('img');
-    img.src = reader.result;
-    
-    const remove = document.createElement('button');
-    remove.className = 'remove-attach';
-    remove.innerHTML = '&times;';
-    remove.type = 'button';
-    remove.title = 'Remove image';
-    remove.onclick = () => {
-      pendingImage = null;
-      attachPreview.hidden = true;
-      fileInput.value = '';
-    };
-    
-    wrap.appendChild(img);
-    wrap.appendChild(remove);
-    attachPreview.appendChild(wrap);
+    if (expectingPaste) {
+      expectingPaste = false;
+      hidePasteOverlay();
+    }
+
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const res = await fetch('/api/upload-image', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.imageUrl) {
+        pendingImage.publicUrl = data.imageUrl;
+        scheduleRemoteSync();
+      }
+    } catch (e) {
+      console.error('Upload failed', e);
+    }
   };
   reader.readAsDataURL(file);
 }
@@ -784,7 +861,7 @@ fileInput.addEventListener('change', () => {
   handleImageFile(fileInput.files[0]);
 });
 
-chatInput.addEventListener('paste', (e) => {
+document.addEventListener('paste', (e) => {
   const items = (e.clipboardData || e.originalEvent.clipboardData).items;
   for (const item of items) {
     if (item.kind === 'file' && item.type.startsWith('image/')) {
@@ -833,7 +910,7 @@ chatForm.addEventListener('submit', async (e) => {
   if (pendingImage) {
     contentForApi = [
       { type: 'text', text: effectiveText || 'What is in this image?' },
-      { type: 'image_url', image_url: { url: pendingImage.dataUrl } }
+      { type: 'image_url', image_url: { url: pendingImage.publicUrl || pendingImage.dataUrl } }
     ];
   } else {
     contentForApi = effectiveText;
