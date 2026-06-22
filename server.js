@@ -55,6 +55,12 @@ async function ensureDatabase() {
       sources JSONB NOT NULL DEFAULT '[]',
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS generated_images (
+      id TEXT PRIMARY KEY,
+      image_data TEXT NOT NULL,
+      mime_type TEXT NOT NULL DEFAULT 'image/png',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }
 
@@ -418,6 +424,76 @@ app.post('/api/edit-image', upload.array('images', 4), async (req, res) => {
 });
 
 // ---- ROBLOX STUDIO ENDPOINTS ----
+
+// Helper: for each create_gui action that carries an "imagePrompt" property,
+// auto-generate an image, store it, and replace imagePrompt with Image URL.
+async function processActionsWithImages(actions) {
+  if (!Array.isArray(actions) || actions.length === 0) return actions;
+
+  const promises = actions.map(async (action) => {
+    const newAction = Object.assign({}, action);
+    if (
+      newAction.type === 'create_gui' &&
+      newAction.properties &&
+      typeof newAction.properties === 'object' &&
+      newAction.properties.imagePrompt
+    ) {
+      const imagePrompt = newAction.properties.imagePrompt;
+      newAction.properties = Object.assign({}, newAction.properties);
+      delete newAction.properties.imagePrompt;
+      try {
+        const imgRes = await fetch(`${API_BASE}/v1/images/generations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({
+            model: IMAGE_MODEL,
+            prompt: imagePrompt,
+            n: 1,
+            size: '1024x1024'
+          })
+        });
+        const imgData = await imgRes.json();
+        if (imgData.data && imgData.data[0] && imgData.data[0].b64_json) {
+          const imageId = 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+          await pool.query(
+            'INSERT INTO generated_images (id, image_data, mime_type) VALUES ($1, $2, $3)',
+            [imageId, imgData.data[0].b64_json, 'image/png']
+          );
+          newAction.properties.Image = BASE_URL + '/api/roblox/image/' + imageId;
+          newAction.properties.ScaleType = 'Fit';
+          newAction.properties.BackgroundTransparency = 1;
+        }
+      } catch (err) {
+        console.error('[processActionsWithImages] image gen error:', err.message);
+      }
+    }
+    return newAction;
+  });
+
+  return Promise.all(promises);
+}
+
+// Serve a persisted generated image by its unique ID
+app.get('/api/roblox/image/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT image_data, mime_type FROM generated_images WHERE id = $1',
+      [req.params.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Image not found' });
+    const buffer = Buffer.from(result.rows[0].image_data, 'base64');
+    res.setHeader('Content-Type', result.rows[0].mime_type);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (err) {
+    console.error('[/api/roblox/image] error:', err.message);
+    res.status(500).json({ error: 'Failed to serve image' });
+  }
+});
+
 app.post('/api/roblox/data', async (req, res) => {
   const { email, password, chats, sources } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Missing credentials" });
@@ -580,7 +656,15 @@ e. Never leave a large empty area under a short list. Keep the outer MainPanel's
 6. String formats for Color3 MUST be EXACTLY like "#FFFFFF" or "255, 255, 255". DO NOT output "Color3.fromRGB(...)".
 7. String formats for AnchorPoint MUST be EXACTLY like "{0.5, 0.5}".
 8. String formats for CornerRadius MUST be EXACTLY like "{0.15, 0}" (Scale preferred). String formats for Padding MAY be EXACTLY like "{0, 8}" (Offset is acceptable ONLY for Padding/CornerRadius/Stroke, never for Size/Position). "CellSize" and "CellPadding" on a UIGridLayout MUST ALSO use the Scale-only "{X, 0, Y, 0}" format, exactly like Size/Position — never a pixel/Offset value.
-9. If no actions are needed, leave the "actions" array empty.${userSourcesText}`;
+9. If no actions are needed, leave the "actions" array empty.
+10. IMAGE GENERATION — Auto-generate images for visual GUI elements: whenever you emit a "create_gui" action whose className is "ImageLabel" or "ImageButton", add an "imagePrompt" string field inside its "properties" object. The system will automatically call the image generation API, store the result, and replace imagePrompt with the real Image URL before it reaches the plugin. Keep prompts concise, descriptive English. Examples:
+    - Pet/item icon:     "imagePrompt": "cute cartoon lion creature holding a sunflower, Roblox pet icon style, vibrant colors, white background"
+    - Shop background:   "imagePrompt": "colorful cartoon sky with clouds and rainbow, Roblox game background, bright and cheerful"
+    - Quest reward icon: "imagePrompt": "golden glowing egg, game reward icon style, shiny, fantasy, transparent background"
+    - Coin icon:         "imagePrompt": "shiny gold coin with star emblem, cartoon game icon, transparent background"
+    - Character avatar:  "imagePrompt": "chibi Roblox character avatar, warrior outfit, blue theme, transparent background"
+    For shop UIs (like Image 1), always create item ImageLabels with imagePrompt for each product slot. For quest UIs (like Image 2), add imagePrompt to reward ImageLabels. For background art, create a full-size ImageLabel (Size "{1, 0, 1, 0}", Position "{0, 0, 0, 0}", ZIndex 0) behind all other elements and give it an imagePrompt describing the scene.
+    Do NOT add imagePrompt to Frame, TextLabel, TextButton, ScrollingFrame, UIGridLayout, UIListLayout, UICorner, UIStroke, UIGradient, UIPadding, or any non-image element.${userSourcesText}`;
 
   const fullMessages = [
     { role: 'system', content: systemPrompt },
@@ -618,6 +702,12 @@ e. Never leave a large empty area under a short list. Keep the outer MainPanel's
 
     // Parse to ensure it's valid JSON before sending to Roblox
     const parsedResponse = JSON.parse(content);
+
+    // Auto-generate images for any create_gui action that carries imagePrompt
+    if (Array.isArray(parsedResponse.actions) && parsedResponse.actions.length > 0) {
+      parsedResponse.actions = await processActionsWithImages(parsedResponse.actions);
+    }
+
     res.json(parsedResponse);
 
   } catch (err) {
