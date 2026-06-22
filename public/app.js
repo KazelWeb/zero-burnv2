@@ -749,8 +749,7 @@ let pendingImage = null; // { dataUrl, mime }
 
 attachBtn.addEventListener('click', () => fileInput.click());
 
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
+function handleImageFile(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
@@ -772,6 +771,22 @@ fileInput.addEventListener('change', () => {
     attachPreview.appendChild(remove);
   };
   reader.readAsDataURL(file);
+}
+
+fileInput.addEventListener('change', () => {
+  handleImageFile(fileInput.files[0]);
+});
+
+chatInput.addEventListener('paste', (e) => {
+  const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+  for (const item of items) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      handleImageFile(file);
+      e.preventDefault();
+      break;
+    }
+  }
 });
 
 function addMessage(role, text, imageDataUrl) {
