@@ -28,12 +28,11 @@ if (!API_KEY) {
 
 if (!process.env.DATABASE_URL) {
   console.error('[fatal] DATABASE_URL is required. Set it in environment variables.');
-  process.exit(1);
 }
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost') ? { rejectUnauthorized: false } : false
 });
 
 async function ensureDatabase() {
@@ -231,12 +230,19 @@ passport.use(new LocalStrategy({ usernameField: 'email', passwordField: 'passwor
 }));
 
 app.set('trust proxy', 1);
+
+const sessionStore = new pgSession({
+  pool,
+  tableName: 'session',
+  createTableIfMissing: true
+});
+
+sessionStore.on('error', function(err) {
+  console.error('Session store error:', err);
+});
+
 app.use(session({
-  store: new pgSession({
-    pool,
-    tableName: 'session',
-    createTableIfMissing: true
-  }),
+  store: sessionStore,
   secret: process.env.SESSION_SECRET || 'change-this-secret',
   resave: false,
   saveUninitialized: false,
@@ -816,7 +822,6 @@ app.post('/api/roblox', async (req, res) => {
     }
   } catch (err) {
     console.error('[fatal] Failed to initialize database:', err);
-    process.exit(1);
   }
 })();
 
