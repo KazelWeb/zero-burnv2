@@ -134,38 +134,40 @@ function normalizeForCompare(str) {
 // Only characters INSIDE a quoted string are touched; structural whitespace
 // between JSON tokens (which JSON.parse already tolerates) is left as-is.
 function sanitizeJsonNewlines(text) {
-  let result = '';
+  if (typeof text !== 'string') return '';
+  let result = [];
   let inString = false;
   let escapeNext = false;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (escapeNext) {
-      result += ch;
+      result.push(ch);
       escapeNext = false;
       continue;
     }
     if (ch === '\\') {
-      result += ch;
+      result.push(ch);
       escapeNext = true;
       continue;
     }
     if (ch === '"') {
       inString = !inString;
-      result += ch;
+      result.push(ch);
       continue;
     }
     if (inString) {
-      if (ch === '\n') { result += '\\n'; continue; }
-      if (ch === '\r') { result += '\\r'; continue; }
-      if (ch === '\t') { result += '\\t'; continue; }
+      if (ch === '\n') { result.push('\\n'); continue; }
+      if (ch === '\r') { result.push('\\r'); continue; }
+      if (ch === '\t') { result.push('\\t'); continue; }
     }
-    result += ch;
+    result.push(ch);
   }
-  return result;
+  return result.join('');
 }
 
 async function resolveImageUrls(messages) {
   if (!Array.isArray(messages)) return;
+  const promises = [];
   for (const msg of messages) {
     if (Array.isArray(msg.content)) {
       for (const part of msg.content) {
@@ -173,19 +175,22 @@ async function resolveImageUrls(messages) {
           const url = part.image_url.url;
           if (url.includes('/api/roblox/image/')) {
             const imageId = url.split('/').pop();
-            try {
-              const result = await pool.query('SELECT image_data, mime_type FROM generated_images WHERE id = $1', [imageId]);
-              if (result.rows[0]) {
-                part.image_url.url = `data:${result.rows[0].mime_type};base64,${result.rows[0].image_data}`;
+            promises.push((async () => {
+              try {
+                const result = await pool.query('SELECT image_data, mime_type FROM generated_images WHERE id = $1', [imageId]);
+                if (result.rows[0]) {
+                  part.image_url.url = `data:${result.rows[0].mime_type};base64,${result.rows[0].image_data}`;
+                }
+              } catch (err) {
+                console.error('Failed to resolve image URL:', err);
               }
-            } catch (err) {
-              console.error('Failed to resolve image URL:', err);
-            }
+            })());
           }
         }
       }
     }
   }
+  await Promise.all(promises);
 }
 
 app.use(express.json({ limit: '25mb' }));
@@ -619,12 +624,12 @@ app.post('/api/roblox/data', async (req, res) => {
 });
 
 app.post('/api/roblox', async (req, res) => {
-  const { prompt, history = [], email, password, image, jobId, temperature } = req.body;
+  try {
+    const { prompt, history = [], email, password, image, jobId, temperature, model } = req.body;
 
-  let userSourcesText = "";
-  let authUser = null;
-  if (email && password) {
-    try {
+    let userSourcesText = "";
+    let authUser = null;
+    if (email && password) {
       const lowerEmail = email.toLowerCase();
       const result = await pool.query('SELECT id, password_hash FROM users WHERE email = $1', [lowerEmail]);
       const user = result.rows[0];
@@ -637,68 +642,59 @@ app.post('/api/roblox', async (req, res) => {
       } else {
         return res.status(401).json({ error: "Invalid email or password.", message: "Invalid email or password.", actions: [] });
       }
-    } catch (err) {
-      console.error("[Roblox Auth Error]:", err);
-      return res.status(500).json({ error: "Auth Error", message: "Auth Error", actions: [] });
     }
-  }
 
-  if (jobId && authUser) {
-    const jobRes = await pool.query('SELECT status, result FROM ai_jobs WHERE id = $1 AND user_id = $2', [jobId, authUser.id]);
-    if (jobRes.rows.length > 0) {
-      const job = jobRes.rows[0];
-      if (job.status === 'completed') {
-        return res.json(job.result);
-      } else if (job.status === 'error') {
-        return res.status(500).json(job.result);
-      } else {
-        for (let i = 0; i < 10; i++) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const check = await pool.query('SELECT status, result FROM ai_jobs WHERE id = $1', [jobId]);
-          if (check.rows.length > 0) {
-            if (check.rows[0].status === 'completed') return res.json(check.rows[0].result);
-            if (check.rows[0].status === 'error') return res.status(500).json(check.rows[0].result);
+    if (jobId && authUser) {
+      const jobRes = await pool.query('SELECT status, result FROM ai_jobs WHERE id = $1 AND user_id = $2', [jobId, authUser.id]);
+      if (jobRes.rows.length > 0) {
+        const job = jobRes.rows[0];
+        if (job.status === 'completed') {
+          return res.json(job.result);
+        } else if (job.status === 'error') {
+          return res.status(500).json(job.result);
+        } else {
+          for (let i = 0; i < 10; i++) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const check = await pool.query('SELECT status, result FROM ai_jobs WHERE id = $1', [jobId]);
+            if (check.rows.length > 0) {
+              if (check.rows[0].status === 'completed') return res.json(check.rows[0].result);
+              if (check.rows[0].status === 'error') return res.status(500).json(check.rows[0].result);
+            }
           }
+          return res.status(202).json({ status: 'pending' });
         }
-        return res.status(202).json({ status: 'pending' });
       }
+      await pool.query('INSERT INTO ai_jobs (id, user_id, status) VALUES ($1, $2, $3)', [jobId, authUser.id, 'pending']);
     }
-    await pool.query('INSERT INTO ai_jobs (id, user_id, status) VALUES ($1, $2, $3)', [jobId, authUser.id, 'pending']);
-  }
 
-  // We force the AI to act as a Roblox Studio assistant and return strict JSON.
-  const getSystemPrompt = require('./systemPrompt');
-  const systemPrompt = getSystemPrompt(userSourcesText);
+    // We force the AI to act as a Roblox Studio assistant and return strict JSON.
+    const getSystemPrompt = require('./systemPrompt');
+    const systemPrompt = getSystemPrompt(userSourcesText);
 
-  let userContent = prompt;
-  if (image) {
-    let finalImageUrl = image;
-    if (image.includes('/api/roblox/image/')) {
-      const imageId = image.split('/').pop();
-      try {
+    let userContent = prompt;
+    if (image) {
+      let finalImageUrl = image;
+      if (image.includes('/api/roblox/image/')) {
+        const imageId = image.split('/').pop();
         const result = await pool.query('SELECT image_data, mime_type FROM generated_images WHERE id = $1', [imageId]);
         if (result.rows[0]) {
           finalImageUrl = `data:${result.rows[0].mime_type};base64,${result.rows[0].image_data}`;
         }
-      } catch (err) {
-        console.error('Failed to resolve image URL:', err);
       }
+      userContent = [
+        { type: 'text', text: prompt || 'What is in this image?' },
+        { type: 'image_url', image_url: { url: finalImageUrl } }
+      ];
     }
-    userContent = [
-      { type: 'text', text: prompt || 'What is in this image?' },
-      { type: 'image_url', image_url: { url: finalImageUrl } }
+
+    await resolveImageUrls(history);
+
+    const fullMessages = [
+      { role: 'system', content: systemPrompt },
+      ...history,
+      { role: 'user', content: userContent }
     ];
-  }
 
-  await resolveImageUrls(history);
-
-  const fullMessages = [
-    { role: 'system', content: systemPrompt },
-    ...history,
-    { role: 'user', content: userContent }
-  ];
-
-  try {
     const upstream = await fetch(`${API_BASE}/v1/chat/completions`, {
       method: 'POST',
       headers: {
@@ -706,7 +702,7 @@ app.post('/api/roblox', async (req, res) => {
         Authorization: `Bearer ${API_KEY}`
       },
       body: JSON.stringify({
-        model: TEXT_MODEL,
+        model: model || TEXT_MODEL,
         temperature: temperature !== undefined ? Number(temperature) : 0.2, // Low temperature for strict JSON adherence
         stream: false,    // Roblox HttpService cannot handle streams
         messages: fullMessages
@@ -715,7 +711,7 @@ app.post('/api/roblox', async (req, res) => {
 
     if (!upstream.ok) {
       const errText = await upstream.text();
-      return res.status(upstream.status).json({ error: errText });
+      throw new Error(`Upstream API Error: ${upstream.status} - ${errText}`);
     }
 
     let data;
@@ -730,8 +726,8 @@ app.post('/api/roblox', async (req, res) => {
       };
     }
 
-    let content = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content.trim() : "";
-    let reasoningContent = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.reasoning_content ? data.choices[0].message.reasoning_content.trim() : "";
+    let content = data?.choices?.[0]?.message?.content?.trim() || "";
+    let reasoningContent = data?.choices?.[0]?.message?.reasoning_content?.trim() || "";
 
     let thinkingProcess = reasoningContent;
     const thinkStart = content.indexOf('<think>');
@@ -784,17 +780,27 @@ app.post('/api/roblox', async (req, res) => {
     }
 
     if (jobId && authUser) {
-      await pool.query('UPDATE ai_jobs SET status = $1, result = $2 WHERE id = $3', ['completed', JSON.stringify(parsedResponse), jobId]);
+      try {
+        await pool.query('UPDATE ai_jobs SET status = $1, result = $2 WHERE id = $3', ['completed', JSON.stringify(parsedResponse), jobId]);
+      } catch (dbErr) {
+        console.error('[DB Update Error]:', dbErr);
+      }
     }
     res.json(parsedResponse);
 
   } catch (err) {
     console.error("[Roblox API Error]:", err);
     const errResult = { error: err.message, message: "Internal Server Error", actions: [] };
-    if (jobId && authUser) {
-      await pool.query('UPDATE ai_jobs SET status = $1, result = $2 WHERE id = $3', ['error', JSON.stringify(errResult), jobId]);
+    if (req.body.jobId && req.body.email) {
+      try {
+        await pool.query('UPDATE ai_jobs SET status = $1, result = $2 WHERE id = $3', ['error', JSON.stringify(errResult), req.body.jobId]);
+      } catch (dbErr) {
+        console.error('[DB Update Error in catch]:', dbErr);
+      }
     }
-    res.status(500).json(errResult);
+    if (!res.headersSent) {
+      res.status(500).json(errResult);
+    }
   }
 });
 
