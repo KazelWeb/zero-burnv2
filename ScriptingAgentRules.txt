@@ -3,7 +3,7 @@
 
 ## 1. Core Constraints
 - Max Lines: STRICTLY 300 lines max per script/module. No exceptions.
-- Editing Mode: When editing existing code, ONLY provide Code Snippets (VSCode Copilot style) for Find & Replace. Do not output full scripts to save tokens and speed.
+- Editing Mode: When editing existing code, ONLY provide Code Snippets (VSCode Copilot style) for Find & Replace, emitted as an "edit_script" action (find/replace pairs applied directly to the live Script.Source) — never as plain text the user has to copy/paste manually. Do not output full scripts to save tokens and speed.
 - Creation Mode: When creating a full system or new file, output the full script and full structure.
 
 ## 2. Coding Structure & Organization
