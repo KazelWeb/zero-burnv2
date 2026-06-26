@@ -619,7 +619,7 @@ app.post('/api/roblox/data', async (req, res) => {
 });
 
 app.post('/api/roblox', async (req, res) => {
-  const { prompt, history = [], email, password, image, jobId } = req.body;
+  const { prompt, history = [], email, password, image, jobId, temperature } = req.body;
 
   let userSourcesText = "";
   let authUser = null;
@@ -707,7 +707,7 @@ app.post('/api/roblox', async (req, res) => {
       },
       body: JSON.stringify({
         model: TEXT_MODEL,
-        temperature: 0.2, // Low temperature for strict JSON adherence
+        temperature: temperature !== undefined ? Number(temperature) : 0.2, // Low temperature for strict JSON adherence
         stream: false,    // Roblox HttpService cannot handle streams
         messages: fullMessages
       })
