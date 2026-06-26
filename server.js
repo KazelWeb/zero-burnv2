@@ -731,6 +731,15 @@ app.post('/api/roblox', async (req, res) => {
     }
 
     let content = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content.trim() : "";
+    let reasoningContent = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.reasoning_content ? data.choices[0].message.reasoning_content.trim() : "";
+
+    let thinkingProcess = reasoningContent;
+    const thinkStart = content.indexOf('<think>');
+    if (thinkStart !== -1) {
+      const thinkEnd = content.indexOf('</think>', thinkStart);
+      const extracted = thinkEnd !== -1 ? content.substring(thinkStart + 7, thinkEnd).trim() : content.substring(thinkStart + 7).trim();
+      thinkingProcess = thinkingProcess ? thinkingProcess + "\n\n" + extracted : extracted;
+    }
 
     // Narrow down to the outermost JSON object boundaries, in case there's
     // still leading/trailing text outside the fence.
@@ -768,6 +777,10 @@ app.post('/api/roblox', async (req, res) => {
 
     if (!parsedResponse.actions || !Array.isArray(parsedResponse.actions)) {
       parsedResponse.actions = [];
+    }
+
+    if (thinkingProcess) {
+      parsedResponse.thinking = thinkingProcess;
     }
 
     if (jobId && authUser) {
