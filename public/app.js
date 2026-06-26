@@ -876,9 +876,27 @@ document.addEventListener('paste', (e) => {
 function addMessage(role, text, imageDataUrl) {
   const wrap = document.createElement('div');
   wrap.className = `msg ${role}`;
+  
   const roleEl = document.createElement('div');
   roleEl.className = 'msg-role';
-  roleEl.textContent = role;
+  
+  const roleText = document.createElement('span');
+  roleText.textContent = role;
+  roleEl.appendChild(roleText);
+  
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'copy-btn';
+  copyBtn.textContent = 'Copy';
+  copyBtn.type = 'button';
+  copyBtn.onclick = () => {
+    navigator.clipboard.writeText(bodyEl.textContent || '');
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => {
+      if (copyBtn) copyBtn.textContent = 'Copy';
+    }, 1500);
+  };
+  roleEl.appendChild(copyBtn);
+
   const bodyEl = document.createElement('div');
   bodyEl.className = 'msg-body';
   bodyEl.textContent = text || '';
