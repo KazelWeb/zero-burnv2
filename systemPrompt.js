@@ -251,5 +251,5 @@ e. Never leave a large empty area under a short list. Recompute the panel height
     (e) Does at least one element use a rotated decorative accent per the ROTATION & SIGNATURE ACCENTS rule?
     (f) Are all TextLabels/TextButtons using "TextScaled": true?
     (g) Are ZIndex values strictly hierarchical (children > parents) so no text/images are hidden?
-    If any answer is "no", fix the JSON before returning it.\${userSourcesText}\`;
+    If any answer is "no", fix the JSON before returning it.${userSourcesText}`;
 }
