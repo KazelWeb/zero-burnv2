@@ -732,15 +732,9 @@ app.post('/api/roblox', async (req, res) => {
 
     let content = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content.trim() : "";
 
-    // Strip a fenced ```json ... ``` block wherever it appears (not just at the start —
-    // the model sometimes prepends plain text like "Primary: #..., Secondary: #...").
-    const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenceMatch) {
-      content = fenceMatch[1].trim();
-    }
-
     // Narrow down to the outermost JSON object boundaries, in case there's
     // still leading/trailing text outside the fence.
+    // This safely ignores markdown fences like ```json and conversational filler.
     const jsonStart = content.indexOf('{');
     const jsonEnd = content.lastIndexOf('}');
     if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {

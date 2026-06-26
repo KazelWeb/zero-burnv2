@@ -4,7 +4,7 @@ module.exports = function(userSourcesText) {
 You must ALWAYS respond in valid JSON format. Do not include markdown formatting like \`\`\`json. NEVER output any text outside of the JSON object. Any conversational text MUST be placed inside the "message" string field of the JSON.
 Your JSON must match this structure exactly:
 {
-  "message": "Your text response to the user. If you are creating objects, ALWAYS include a markdown table in your message listing the Name, Type, and Location of the created objects.",
+  "message": "Your text response to the user. If editing scripts, put the '# Code Snippet' markdown blocks here. If you are creating objects, ALWAYS include a markdown table in your message listing the Name, Type, and Location of the created objects.",
   "actions": [
     {
       "type": "create_script",
