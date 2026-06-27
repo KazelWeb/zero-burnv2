@@ -259,14 +259,42 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-const dbReadyPromise = ensureDatabase().catch(err => {
-  console.error('[fatal] Failed to initialize database:', err);
-  return Promise.reject(err);
+app.get('/api/health', async (req, res) => {
+  const status = { ok: true, checks: {} };
+  status.checks.databaseUrlSet = !!process.env.DATABASE_URL;
+  status.checks.apiKeySet = !!process.env.API_KEY;
+  status.checks.nodeEnv = process.env.NODE_ENV || 'not set';
+  try {
+    const result = await pool.query('SELECT NOW() as now');
+    status.checks.databaseConnection = 'ok';
+    status.checks.serverTime = result.rows[0].now;
+  } catch (err) {
+    status.ok = false;
+    status.checks.databaseConnection = 'failed';
+    status.checks.databaseError = err.message;
+  }
+  res.status(status.ok ? 200 : 500).json(status);
 });
 
+let dbReadyPromise = null;
+
+function getDbReadyPromise() {
+  if (!dbReadyPromise) {
+    dbReadyPromise = ensureDatabase().catch(err => {
+      console.error('[fatal] Failed to initialize database:', err);
+      dbReadyPromise = null;
+      throw err;
+    });
+  }
+  return dbReadyPromise;
+}
+
 app.use((req, res, next) => {
-  dbReadyPromise.then(() => next()).catch(() => {
-    res.status(503).json({ error: 'Database is not ready yet. Please try again in a moment.' });
+  getDbReadyPromise().then(() => next()).catch(err => {
+    res.status(503).json({
+      error: 'Database is not ready yet. Please try again in a moment.',
+      detail: err && err.message
+    });
   });
 });
 
@@ -831,7 +859,7 @@ app.post('/api/roblox', async (req, res) => {
 
 (async () => {
   try {
-    await dbReadyPromise;
+    await getDbReadyPromise();
     // Only listen on a port if we are NOT in Vercel (local development)
     if (process.env.NODE_ENV !== 'production') {
       const PORT = process.env.PORT || 3000;
