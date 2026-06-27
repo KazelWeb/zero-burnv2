@@ -35,6 +35,10 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost') ? { rejectUnauthorized: false } : false
 });
 
+pool.on('error', (err) => {
+  console.error('[fatal] Unexpected error on idle Postgres client (this used to crash the whole process):', err);
+});
+
 async function ensureDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -255,6 +259,17 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+const dbReadyPromise = ensureDatabase().catch(err => {
+  console.error('[fatal] Failed to initialize database:', err);
+  return Promise.reject(err);
+});
+
+app.use((req, res, next) => {
+  dbReadyPromise.then(() => next()).catch(() => {
+    res.status(503).json({ error: 'Database is not ready yet. Please try again in a moment.' });
+  });
+});
+
 function requireAuth(req, res, next) {
   if (req.isAuthenticated && req.isAuthenticated()) return next();
   return res.status(401).json({ error: 'Unauthorized' });
@@ -286,13 +301,17 @@ app.post('/auth/register', async (req, res) => {
       res.json({ success: true, user: { email: result.rows[0].email, displayName: result.rows[0].displayName } });
     });
   } catch (err) {
+    console.error('[/auth/register] error:', err);
     res.status(500).json({ error: 'Registration failed.' });
   }
 });
 
 app.post('/auth/login', (req, res, next) => {
   passport.authenticate('local', async (err, user, info) => {
-    if (err) return res.status(500).json({ error: 'Server error' });
+    if (err) {
+      console.error('[/auth/login] error:', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
     if (!user) return res.status(401).json({ error: info.message || 'Invalid credentials' });
 
     req.login(user, err => {
@@ -812,7 +831,7 @@ app.post('/api/roblox', async (req, res) => {
 
 (async () => {
   try {
-    await ensureDatabase();
+    await dbReadyPromise;
     // Only listen on a port if we are NOT in Vercel (local development)
     if (process.env.NODE_ENV !== 'production') {
       const PORT = process.env.PORT || 3000;
@@ -821,7 +840,7 @@ app.post('/api/roblox', async (req, res) => {
       });
     }
   } catch (err) {
-    console.error('[fatal] Failed to initialize database:', err);
+    console.error('[fatal] Server failed to start because the database was not ready:', err);
   }
 })();
 
